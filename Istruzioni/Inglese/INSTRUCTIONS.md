@@ -8,50 +8,54 @@ Hello, Here I will briefly explain the functions of the Mod, in case something i
 
 ---
 
-### There will be 4 files
-<img src="/Istruzioni/Inglese/BAN_DATA Folder.PNG"/>
-
----
-
+### There will be more .txt files and a MENU folder with two other files
+### :star: WelcomeTemplate.txt
+Here you will insert the text you want to send to players who enter the lobby
+Use \n to go to the next line and hex colors to color the words (refer to the example)
 ### :star: Friends.txt
-Here you will find the account codes of your friends, they must be inserted with the command **/add (id)** and removed with **/dlt (id)**
-
----
-
+Here you will put the account codes of friends, they must be inserted with the command **/f (id)** and removed with **/df (id)**
+or using the menu (opens with the delete key) to the friends section
+### :star: Afk.txt
+Here you will put the account codes of those exempt from the afk kick, they must be inserted with the command **/afk (id)** and removed with **/dafk (id)**
+or using the menu (opens with the delete key) to the friends section Afk
 ### :star: Denyname.txt
 Here you will enter the names that you do not want in the lobby (for example Turetta, Hitler etc)
-
-They can be inserted and removed manually or with the command **/adddn (name)** and **/dltdn (name)**
-
----
-
+They can be entered and removed manually or with the command **/dn (name)** and **/ddn (name)**
 ### :star: BanWord.txt
-Here we can add the forbidden words and swear words
-
-They can be inserted and removed manually or with the command **/adddw (word)** and **/dltdw (word)**
-
----
-
+Here we can add the forbidden words and the swear words
+They can be entered and removed manually or with the command **/dw (word)** and **/ddw (word)**
+### :star: SpamStart.txt
+Here you will enter the words start
+They can be entered and removed manually or with the command **/ds (name)** and **/dds (name)**
 ### :star: BanList.txt
-Here you will automatically add the players that you ban and do not want to allow to enter your lobby anymore, in case you mistakenly add someone who is not you want you have to delete it from the list manually.
+Here you will automatically add the players that you ban and do not want to enter your lobby anymore, in case you mistakenly add someone you do not want you must delete them from the list manually.
 (To add players the option must be active)
-
 <img src="/Istruzioni/Inglese/BanList.PNG" width="30%" />
 
----
-
-### There are several commands, with the command **"/help"** you will get all the Info.
+### There are several commands, with the command **"/aiuto"** you will get all the Info.
 For each command or action a notification will appear on the left of the screen with the description of what is happening or in chat (visible only to you).
 
 ---
 
-### commands /msg - /msgs - /msgw
-To customize the commands with your messages you have to edit the template.dat file located in the language folder and insert your texts.
-The template.dat file then rename it to English.dat
+### MENU OPTIONS
+To customize the commands or default messages to send you must modify the files in the MENU folder (the menu that opens with the delete key)
+### :star: buttonmessage.txt
+you must enter the title and then the text to send (maximum 120 characters) separated by |
 
-<img src="/Istruzioni/Inglese/Language Folder.PNG" />
+GREETINGS | Hello, how are you?
 
-<img src="/Istruzioni/Inglese/English_dat example.PNG" width="30%" />
+GREETINGS will be the title of the button
+
+Hello, how are you? will be the text sent in chat
+
+### :star: commandmessage.txt
+It works the same but instead of sending the message it executes the associated command
+
+ID INFO | /id
+
+ID INFO will be the title of the button
+
+/id will be the command that executes, in this case it will show you the ids of the players present
 
 ---
 
