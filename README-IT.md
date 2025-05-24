@@ -1,13 +1,7 @@
 ### [ISTRUZIONI](Istruzioni/Italiano/ISTRUZIONI-IT.md)
 
 ----
-<h1 align="center">IMPORTANTE</h1>
 
-### DAL 06 APRILE CI SONO HACKER CHE KIKKANO TUTTI I GIOCATORI IN LOBBY, SIA SUI SERVER EUROPEI CHE QUELLI AMERICANI E/O ASIATICI:
-### QUESTA MOD PER IL MOMENTO é IN GRADO DI BANNARE L HACKER PRIMA CHE POSSA ENTRARE IN LOBBY E PROVOCARE DANNI!!!
-### ATTIVARE LA QUARTA OPZIONE NELLA SEZIONE BAN "BANNA GIOCATORI CON CODICE NON VALIDO"
-### BUON DIVERTIMENTO
-----
 <h1 align="center">BanMod per Among Us</h1>
 
 
@@ -54,25 +48,14 @@ viene raggirato cambiando l'ip del dispositivo o usando una vpn!!!
 > - Puoi abilitare o disabilitare le decorazioni della lobby, devi uscire e ricreare la lobby per attivare le modifiche
 > - Puoi disabilitare o abilitare la musica della lobby
 > - Puoi escludere i tuoi amici dal kick per spam e parolacce (FriendsList.txt)
+> - Puoi decidere se proteggere o espellere i giocatori afk e decidere anche se escludere determinati player
+> - Puoi colorare e aggiungere simboli ai nomi
+> - Puoi notificare agli impostori chi sono i compagni( utile se hanno i nomi colorati)
+> - Puoi impostare un player "indovino". sarà casuale e nei meeting utilizzando /kill (id o nome) potrà uccidere l impostore o suicidarsi se l id non è corretto
+> - I cambiamenti nelle impostazioni non si resettano ad ogni riavvio del gioco
+> - aggiunto un menu che si apre col tasto delete/canc
 
-### COMANDI
-- **/aiuto** : Mostra tutti i comandi durante il gioco.
-- **/id** : mostra tutti gli ID dei giocatori nella chat (leggibile solo da te)
-- **/level (num)** : Imposta momentaneamente il tuo livello, valido da 1 a 999
-- **/add (id)** : Aggiungi un amico alla lista Friends.txt
-- **/dlt (id)** : Rimuovi un amico dalla lista Friends.txt
-- **/adddn (nome)** : Aggiungi un nome vietato alla lista DenyName.txt
-- **/dltdn (nome)** : Rimuovi un nome vietato dalla lista DenyName.txt
-- **/adddw (parola)** : Aggiungi una Parola vietata alla lista BanWord.txt
-- **/dltdw (parola)** : Rimuovi una Parola vietata dalla lista BanWord.txt
-- **/spam** : Invia un messaggio in chat avvertendo il giocatore di non inviare spam start (leggibile da tutti)
-- **/word** : Invia un messaggio in chat avvertendo il giocatore di non usare parole proibite (leggibile da tutti)
-- **/msg** : Invia un messaggio in chat (leggibile da tutti, se lo modifichi non superare i 120 caratteri)
-- **/msgs** : Invia un messaggio in chat che riguarda lo spam (leggibile da tutti, se lo modifichi non superare i 120 caratteri)
-- **/msgw** : Invia un messaggio in chat che riguarda le parolacce (leggibile da tutti, se lo modifichi non superare i 120 caratteri)
-- **/end** : Chiude il meeting (Non usarlo per barare!)
-- 
----
+
 
                    
 ---
