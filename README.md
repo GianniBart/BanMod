@@ -2,13 +2,7 @@
 ### [INSTRUCTIONS](Istruzioni/Inglese/INSTRUCTIONS.md)
 
 ---
-<h1 align="center">IMPORTANT</h1>
 
-### SINCE APRIL 6TH THERE ARE HACKERS WHO KICK ALL PLAYERS IN THE LOBBY, BOTH ON EUROPEAN - AMERICAN AND ASIAN SERVERS:
-### THIS MOD IS CURRENTLY ABLE TO BANN THE HACKER BEFORE HE CAN ENTER IN THE LOBBY AND CAUSE DAMAGE!!!
-### ACTIVATE THE FOURTH OPTION IN THE BAN SECTION "BAN PLAYERS WITH INVALID CODE"
-### HAVE FUN
----
 
 <h1 align="center">BanMod for Among Us</h1>
 
@@ -44,35 +38,22 @@ is circumvented by changing the ip of the device or using a vpn!!!
 ### Features
 
 > - You can enable chat to access the banmenu and kick troll or afk players without having to wait for the next meeting
-> - Immediately deny access to lobbies to players with names you have banned (Denyname.txt)
-> - Immediately deny access to lobbies to players who are on the list (banList.txt) or to players who are on the blocked list on Among.
-> - Kick or ban those who use banned words or who spam start, you can set from 0 to 5 allowed words before kicking.
-> - You have a countdown in the lobby to see how much time is left until the game closes automatically (may not be real, for example if you become host after the previous host has left)
+> - Immediately deny lobby access to players with names you have banned (Denyname.txt)
+> - Immediately deny lobby access to players who are on the list (banList.txt) or players who are on the block list in Among.
+> - Kick or ban those who use banned words or spam start, you can set 0 to 5 allowed words before kicking.
+> - You have a countdown in the lobby to see how much time is left until the automatic closing (may not be real, for example if you become host after the previous host has left)
 > - You can prevent the game from starting if you accidentally pressed the Start button.
-> - You can enable or disable zoom (only works in the lobby or if you died, to avoid cheating)
-> - You can enable or disable lobby decorations, you must exit and recreate the lobby to activate the changes
+> - You can enable or disable zoom (only works in lobby or if you are dead, to avoid cheating)
+> - You can enable or disable lobby decorations, you have to exit and recreate the lobby to activate the changes
 > - You can disable or enable lobby music
-> - You can kick your friends out of the kick for spamming and swearing (FriendsList.txt)
+> - You can exclude your friends from kick for spam and swearing (FriendsList.txt)
+> - You can decide whether to protect or kick afk players and also decide whether to exclude certain players
+> - You can color and add symbols to names
+> - You can notify impostors who their teammates are (useful if they have colored names)
+> - You can set a "guess" player. It will be random and in meetings using /kill (id or name) it can kill the impostor or commit suicide if the id is incorrect
+> - Changes in settings do not reset on every restart of the game
+> - added a menu that opens with the delete/canc key
 
-### CONTROLS
-- **/help** : Shows all commands during the game.
-- **/id** : Show all player IDs in chat (only readable by you)
-- **/level (num)** : Temporarily set your level, valid from 1 to 999
-- **/add (id)** : Add a friend to the Friends.txt list
-- **/dlt (id)** : Remove a friend from the Friends.txt list
-- **/adddn (name)** : Add a denied name to the DenyName.txt list
-- **/dltdn (name)** : Remove a denied name from the DenyNames.txt list
-- **/adddw (word)** : Add a denied word to the BanWord.txt list
-- **/dltdw (word)** : Remove a denied word from the BanWord.txt list
-- **/spam** : Send a message in chat warning the player not to send spam start (readable by everyone)
-- **/word** : Send a message in chat warning the player not to use forbidden words (readable by everyone)
-- **/msg** : Send a message in chat (readable by everyone, if you edit it do not exceed 120 characters)
-- **/msgs** : Send a message in chat about spam (readable by everyone, if you edit it do not exceed 120 characters)
-- **/msgw** : Send a message in chat about swear words (readable by everyone, if you modify it do not exceed 120 characters)
-- **/end** : End a meeting (Dont use for cheating please!)
----
-
----
 ### INSTALLATION
 
 To install the mod, just copy the contents into the main folder of among.
