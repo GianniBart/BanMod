@@ -20,13 +20,25 @@
 
 ### Information
 
-BanMod was created primarily to prevent "toxic" players from rejoining after the official Among Us ban.
+BanMod born primarily to prevent "toxic" players from rejoining after the official Among Us ban.
 Unfortunately, the official Among Us ban wasn't enough
 and can be circumvented by changing the device's IP address or using a VPN!!!
+The mod has gradually become more complex and many other features have been added,
+always striving to keep it compatible with official servers. For this reason, it has some limitations and annoyances
+(such as waiting for messages to be sent).
+___
+### Warning
+The mod is compatible with official servers with some limitations:
+To function properly, you must be a Host or access lobbies modded with BanMod.
 
-Gradually, the mod has become increasingly complex and many more features have been added,
-always striving to keep it compatible with the official servers. For this reason, it has some limitations and annoyances
-(such as waiting to send messages).
+***Joining public lobbies will result in errors and, in the worst cases, a ban.***
+___
+### Customation and Suggestion
+Customization with your own images, backgrounds, or names is available upon request (only for aesthetics).
+(You need telegramm to send you the custom dll)
+Suggestions for improvements are welcome.
+Please note that changes will always be very limited to work on official servers, and not all requested changes will be implemented.
+Changes that could give you an advantage over other players will be ignored.
 
 ---
 ### Features
@@ -56,9 +68,7 @@ The mod will create a new folder called BAN_DATA,
 from there you can add names and banned words template, add/remove players from the ban list, ecc
 
 ---
-### Customization 
-Customization with your own images, backgrounds, or names is available upon request (only for aesthetics).
-Personalization is free, but a donation is always appreciated.
+### Support My Job
 If you want to support me you can donate on paypal.
 
 ### 💰 [Donate with PayPal](https://www.paypal.com/donate/?hosted_button_id=AQTKF6FGQLPCL)
