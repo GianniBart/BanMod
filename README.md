@@ -27,7 +27,7 @@ The mod has gradually become more complex and many other features have been adde
 always striving to keep it compatible with official servers. For this reason, it has some limitations and annoyances
 (such as waiting for messages to be sent).
 ___
-### Ringraziamenti
+### Thanks
 Many of you also participated in the creation and optimization of the mod, suggesting improvements and testing the mod when I couldn't.
 I thank everyone who help me, in particular, I thank:
 - ***Kaito*** for the kaitoRun mode and for the suggestions for improving the BanMod.online website.
