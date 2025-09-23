@@ -27,6 +27,17 @@ The mod has gradually become more complex and many other features have been adde
 always striving to keep it compatible with official servers. For this reason, it has some limitations and annoyances
 (such as waiting for messages to be sent).
 ___
+### Ringraziamenti
+Many of you also participated in the creation and optimization of the mod, suggesting improvements and testing the mod when I couldn't.
+I thank everyone who help me, in particular, I thank:
+- ***Kaito*** for the kaitoRun mode and for the suggestions for improving the BanMod.online website.
+- ***Veiledpurple***, always present, informs me of bugs and suggests many improvements, including excluding the red name, excluding the detective from the otherwise too strong immortal, and adding the suicide option for the exiler when using the command.
+- ***Mistaken*** for the suggestions on sabotage, residual tasks, and the command to call the meeting from chat.
+- ***ELV1S*** for the suggestions on name changes and for the colored text chat.
+- Others for the suggestions for autostart, kicking fortegreen players, for the summary, and for the suggestion for disabling the first meeting.
+  
+I especially thank all my friends who play in my modded lobbies and allow me to test the mod with so much patience.
+___
 ### Warning
 The mod is compatible with official servers with some limitations:
 To function properly, you must be a Host or access lobbies modded with BanMod.
