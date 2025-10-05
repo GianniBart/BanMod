@@ -19,13 +19,18 @@
 <br>
 
 ### Information
-
 BanMod born primarily to prevent "toxic" players from rejoining after the official Among Us ban.
 Unfortunately, the official Among Us ban wasn't enough
 and can be circumvented by changing the device's IP address or using a VPN!!!
 The mod has gradually become more complex and many other features have been added,
 always striving to keep it compatible with official servers. For this reason, it has some limitations and annoyances
 (such as waiting for messages to be sent).
+___
+### Important
+***THIS MOD IS INCOMPATIBLE WITH OTHER MODS***
+
+Even if it seems to work, it could cause problems.
+Before open an issue, try uninstalling other mods.
 ___
 ### Thanks
 Many of you also participated in the creation and optimization of the mod, suggesting improvements and testing the mod when I couldn't.
