@@ -31,6 +31,8 @@ ___
 
 Even if it seems to work, it could cause problems.
 Before open an issue, try uninstalling other mods.
+For easy issue management, they will be closed as soon as the fix is ​​applied.
+If you encounter other problems, request a reopening or create another issue.
 ___
 ### Thanks
 Many of you also participated in the creation and optimization of the mod, suggesting improvements and testing the mod when I couldn't.
