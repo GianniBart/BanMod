@@ -249,8 +249,9 @@ internal static class MurderPlayerCombinedPatch
                 byte playerId =
                     __instance.Data.PlayerId;
 
-                if (target.Data.PlayerId !=
-                    __instance.shapeshiftTargetPlayerId)
+                if (__instance.PlayerId != target.PlayerId && 
+                    (target.Data.PlayerId != __instance.shapeshiftTargetPlayerId ||
+                    NoKillCommsUtility.IsMisfire(__instance)))
                 {
                     if (!misfireCountShape.ContainsKey(
                             playerId))
@@ -382,8 +383,17 @@ internal static class MurderPlayerCombinedPatch
                         __instance,
                         target);
 
-                KillTracker.RegisterKill(
-                    __instance.PlayerId);
+                bool snsHnsSuicide =
+                    GameManager.Instance != null &&
+                    GameManager.Instance.IsHideAndSeek() &&
+                    Options.EnableSNS.GetBool() &&
+                    __instance.PlayerId == target.PlayerId;
+
+                if (!snsHnsSuicide)
+                {
+                    KillTracker.RegisterKill(
+                        __instance.PlayerId);
+                }
             }
 
             if (!BanMod.playerDeathTimes

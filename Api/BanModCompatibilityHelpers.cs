@@ -132,7 +132,28 @@ namespace BanMod
 
         public static void ClearToken()
         {
-            Token = "";
+            ClearToken(BanModCore.GetCurrentFriendCode(), BanModCore.GetCurrentClientToken());
+        }
+
+        public static void ClearToken(UnityWebRequest rejectedRequest)
+        {
+            if (rejectedRequest == null) return;
+            try
+            {
+                ClearToken(rejectedRequest.GetRequestHeader("X-BANMOD-FriendCode") ?? "",
+                           rejectedRequest.GetRequestHeader("X-BANMOD-Client-Token") ?? "");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("[BANMOD][AUTH] Cannot inspect rejected request: " + ex.GetType().Name);
+            }
+        }
+
+        public static void ClearToken(string friendCode, string rejectedToken)
+        {
+            BanModCore.RejectClientToken(friendCode, rejectedToken);
+            if (!string.IsNullOrWhiteSpace(rejectedToken))
+                System.Threading.Interlocked.CompareExchange(ref Token, "", rejectedToken);
         }
 
         public static string ExtractJsonString(string json, string key, string fallback = "")

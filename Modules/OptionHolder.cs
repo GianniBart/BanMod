@@ -198,8 +198,8 @@ namespace BanMod
         public static OptionItem AllowColorChangeModerator;
         public static OptionItem DisableRole;
         public static OptionItem DisableMeetingsAndReports;
-        public static OptionItem TrackImpostorTeammate;
-        public static OptionItem revealVotes;
+        //public static OptionItem TrackImpostorTeammate;
+        //public static OptionItem revealVotes;
         public static OptionItem EnableGameTimer;
         public static OptionItem PauseGameTimerDuringMeetings;
         public static FloatOptionItem GameTimerMinutes;
@@ -321,7 +321,7 @@ namespace BanMod
         public static OptionItem DisableCollectShells;
         public static OptionItem DisableUnknown;
         public static IntegerOptionItem AutoVoteTime;
-        public static OptionItem AutoVote;
+        //public static OptionItem AutoVote;
         public static StringOptionItem AutoVoteAction;
         public static OptionItem sendInfocomand;
         //public static OptionItem buttonvisibile;
@@ -396,15 +396,12 @@ namespace BanMod
         public static StringOptionItem FFAVentTeleportMode;
         public static IntegerOptionItem FfaVentMaxSeconds1;
         public static StringOptionItem FFAVentTeleportMode1;
-        public static OptionItem specialvote;
         public static List<StringOptionItem> SeekerSelections = new List<StringOptionItem>();
-        //public static OptionItem CustomSkin;
         public static OptionItem DisableDevice;
         public static bool ForceOwnLanguage = true;
         public static StringOptionItem ProfilerHintMode;
         public static StringOptionItem ProtectFirstPlayer;
         public static StringOptionItem FfaKillerRole;
-        public static StringOptionItem HnSKillerRole;
         public static StringOptionItem FfaTeamKillerRole;
         public static StringOptionItem KillRaceKillerRole;
         public static StringOptionItem AssassinKillerRole;
@@ -432,21 +429,23 @@ namespace BanMod
         public static bool IsLoaded = false;
         private static bool _reOpenSettingsScheduled = false;
         private static bool syncingFirstSeeker = false;
-        public static OptionItem AutoMuteForDiscord;
+        //public static OptionItem AutoMuteForDiscord;
         public static OptionItem EnableFFA;
         public static OptionItem EnableSNS;
         public static IntegerOptionItem Shapetimer;
         public static IntegerOptionItem SnSPunizione;
         public static IntegerOptionItem SnSError;
+        public static OptionItem EnableAllChat;
+        public static OptionItem NokillComsSNS;
+        public static OptionItem NokillComsPNS;
+        public static OptionItem EnableAntiBotSystem;
         public static bool IsZombieMode => GameMode != null && GameMode.Selected == GameModeType.ZombieMode;
 
         public static readonly GameModeType[] GameModeOrder =
         {
             GameModeType.Default,
-            GameModeType.BanMod,
             GameModeType.KaitoRun,
             GameModeType.TaskRun,
-            GameModeType.JBMode,
             GameModeType.SnS,
             GameModeType.PnS,
             GameModeType.ZombieMode,
@@ -462,10 +461,8 @@ namespace BanMod
         public static readonly GameModeType[] VanillaGameModeOrder =
         {
             GameModeType.Default,
-            GameModeType.BanMod,
             GameModeType.KaitoRun,
             GameModeType.TaskRun,
-            GameModeType.JBMode,
             GameModeType.SnS,
             GameModeType.PnS,
             GameModeType.ZombieMode,
@@ -578,14 +575,13 @@ namespace BanMod
                 if (syncingFfaSns)
                     return;
 
-                if (EnableFFA.GetBool() && EnableSNS.GetBool())
+                if (EnableFFA.GetBool())
                 {
                     syncingFfaSns = true;
                     EnableSNS.SetValue(0, false);
                     syncingFfaSns = false;
                 }
 
-                HnSKillerRole.SetEnabled(EnableFFA.GetBool());
                 ReOpenSettings();
             });
 
@@ -594,7 +590,7 @@ namespace BanMod
                 if (syncingFfaSns)
                     return;
 
-                if (EnableSNS.GetBool() && EnableFFA.GetBool())
+                if (EnableSNS.GetBool())
                 {
                     syncingFfaSns = true;
                     EnableFFA.SetValue(0, false);
@@ -603,7 +599,6 @@ namespace BanMod
 
                 ReOpenSettings();
             });
-            HnSKillerRole = (StringOptionItem)StringOptionItem.Create("FfaKillerRole", new[] { "Viper", "Impostor" }, 0, OptionCategory.Seeker, true, false).SetParent(EnableFFA).SetColor(new Color32(255, 204, 0, 255));
             NumSeekers = (IntegerOptionItem)IntegerOptionItem.Create("NumSeekers", new(1, 14, 1), 1, OptionCategory.Seeker, true).SetColor(new Color32(0, 153, 255, 255));
             SeekerSelections.Clear();
 
@@ -692,15 +687,6 @@ namespace BanMod
             });
 
             UpdateSeekerOptions();
-
-            EnableFFA.RegisterUpdateValueEvent((sender, args) =>
-            {
-                bool enabled = EnableFFA.GetBool();
-
-                HnSKillerRole.SetEnabled(enabled);
-
-                ReOpenSettings();
-            });
 
             GameMode = new GameModeOptionItem(
                 "GameMode",
@@ -837,10 +823,6 @@ namespace BanMod
                 bool hotpotato =
                     selected == GameModeType.HotPotatoModded;
 
-                HnSKillerRole.SetEnabled(
-                    HnS
-                );
-
                 FfaKillerRole.SetEnabled(
                     ffa 
                 );
@@ -936,9 +918,11 @@ namespace BanMod
 
             MisfiresToSuicideSns = (IntegerOptionItem)IntegerOptionItem.Create("SuicideAfterMisfiresAmount", new(1, 10, 1), 2, OptionCategory.SNS, false).SetColor(new Color32(0, 153, 255, 255));
             CantKillTimeSns = (IntegerOptionItem)IntegerOptionItem.Create("MisfireKillCooldown", new(0, 60, 5), 20, OptionCategory.SNS, false).SetColor(new Color32(0, 153, 255, 255));
+            NokillComsSNS = BooleanOptionItem.Create("NokillComs", false, OptionCategory.SNS, true).SetColor(new Color32(0, 153, 255, 255));
 
             MisfiresToSuicidePns = (IntegerOptionItem)IntegerOptionItem.Create("SuicideAfterMisfiresAmountPns", new(1, 10, 1), 2, OptionCategory.PNS, false).SetColor(new Color32(0, 153, 255, 255));
             CantKillTimePns = (IntegerOptionItem)IntegerOptionItem.Create("MisfireKillCooldownPns", new(0, 60, 5), 20, OptionCategory.PNS, false).SetColor(new Color32(0, 153, 255, 255));
+            NokillComsPNS = BooleanOptionItem.Create("NokillComs", false, OptionCategory.PNS, true).SetColor(new Color32(0, 153, 255, 255));
 
             ZombieInitialInfectionDelay = (IntegerOptionItem)IntegerOptionItem.Create("ZombieInitialInfectionDelay",new(5, 180, 5),30,OptionCategory.Zombie,true).SetColor(new Color32(0, 153, 255, 255));
             ZombieSpeedMultiplier = (FloatOptionItem)FloatOptionItem.Create("ZombieSpeedMultiplier",new(0f, 100f, 5f),90f,OptionCategory.Zombie,true).SetColor(new Color32(0, 153, 255, 255));
@@ -954,18 +938,19 @@ namespace BanMod
             AutoStartCount = (IntegerOptionItem)IntegerOptionItem.Create("AutoStartCount", new(1, 15, 1), 14, OptionCategory.Lobby, true).SetParent(AutoStart).SetColor(new Color32(0, 153, 255, 255));
             AutoStartDelay = (IntegerOptionItem)IntegerOptionItem.Create("AutoStarDelay", new(0, 60, 5), 30, OptionCategory.Lobby, true).SetParent(AutoStart).SetColor(new Color32(0, 153, 255, 255));
 
-            AutoMuteForDiscord = BooleanOptionItem.Create("AutoMuteForDiscord", false, OptionCategory.Gameplay, true).SetColor(new Color32(0, 153, 255, 255));
             TagName = BooleanOptionItem.Create("ModdedName", true, OptionCategory.Gameplay, true).SetColor(new Color32(0, 153, 255, 255));
             TagGameMod = BooleanOptionItem.Create("TagGameMod", true, OptionCategory.Gameplay, true).SetColor(new Color32(0, 153, 255, 255));
             DisableRole = BooleanOptionItem.Create("DisableRole", false, OptionCategory.Gameplay, true).SetColor(new Color32(0, 153, 255, 255));
+            EnableAllChat = BooleanOptionItem.Create("EnableAllChat", false, OptionCategory.Gameplay, true).SetColor(new Color32(0, 153, 255, 255));
             RandomVentSpawn = BooleanOptionItem.Create("RandomVentSpawn", false,OptionCategory.Gameplay, true).SetColor(new Color32(0, 153, 255, 255));
             randomMap = BooleanOptionItem.Create("Opt_RandomMap", false, OptionCategory.Gameplay, true).SetColor(new Color32(0, 153, 255, 255));
-            TrackImpostorTeammate = BooleanOptionItem.Create("TrackImpostorTeammate", false, OptionCategory.Gameplay, true).SetColor(new Color32(0, 153, 255, 255));
+            //TrackImpostorTeammate = BooleanOptionItem.Create("TrackImpostorTeammate", false, OptionCategory.Gameplay, true).SetColor(new Color32(0, 153, 255, 255));
             MoreImp = BooleanOptionItem.Create("MoreImpostors", false, OptionCategory.Gameplay, true).SetColor(new Color32(0, 153, 255, 255));
             NumImpostor = (IntegerOptionItem)IntegerOptionItem.Create("NumImpostorMax", new(4, 7, 1), 4, OptionCategory.Gameplay, false).SetParent(MoreImp).SetColor(new Color32(0, 153, 255, 255));
-            DisableDeviceCam = BooleanOptionItem.Create("DisableDeviceCam", false, OptionCategory.Gameplay, true).SetColor(new Color32(0, 153, 255, 255));
-            DisableDeviceAdminPanel = BooleanOptionItem.Create("DisableDeviceAdminPanel", false, OptionCategory.Gameplay, true).SetColor(new Color32(0, 153, 255, 255));
-            DisableDeviceVitals = BooleanOptionItem.Create("DisableDeviceVitals", false, OptionCategory.Gameplay, true).SetColor(new Color32(0, 153, 255, 255));
+            DisableDevice = BooleanOptionItem.Create("DisableDevice", false, OptionCategory.Gameplay, true).SetColor(new Color32(0, 153, 255, 255));
+            DisableDeviceCam = BooleanOptionItem.Create("DisableDeviceCam", false, OptionCategory.Gameplay, true).SetParent(DisableDevice).SetColor(new Color32(0, 153, 255, 255));
+            DisableDeviceAdminPanel = BooleanOptionItem.Create("DisableDeviceAdminPanel", false, OptionCategory.Gameplay, true).SetParent(DisableDevice).SetColor(new Color32(0, 153, 255, 255));
+            DisableDeviceVitals = BooleanOptionItem.Create("DisableDeviceVitals", false, OptionCategory.Gameplay, true).SetParent(DisableDevice).SetColor(new Color32(0, 153, 255, 255));
             EnableGameTimer = (BooleanOptionItem)BooleanOptionItem.Create("EnableGameTimer", false, OptionCategory.Gameplay, true).SetColor(new Color32(0, 153, 255, 255));
             GameTimerMinutes = (FloatOptionItem)FloatOptionItem.Create("GameTimerMinutes",new(1f, 60f, 0.5f),30f,OptionCategory.Gameplay,true).SetParent(EnableGameTimer).SetColor(new Color32(0, 153, 255, 255));
             GameTimerMessage = BooleanOptionItem.Create("GameTimerMessage", false, OptionCategory.Gameplay, true).SetParent(EnableGameTimer).SetColor(new Color32(0, 153, 255, 255));
@@ -973,11 +958,10 @@ namespace BanMod
 
             NoKillMeeting = BooleanOptionItem.Create("NoKillMeeting", false, OptionCategory.Meetings, true).SetColor(new Color32(0, 153, 255, 255));
             DisableMeetingsAndReports = BooleanOptionItem.Create("Opt_DisableMeetingsAndReports", false, OptionCategory.Meetings, true).SetColor(new Color32(0, 153, 255, 255));
-            revealVotes = BooleanOptionItem.Create("revealVotes", false, OptionCategory.Meetings, true).SetColor(new Color32(0, 153, 255, 255));
-            specialvote = BooleanOptionItem.Create("SpecialVote", false, OptionCategory.Meetings, true).SetColor(new Color32(0, 153, 255, 255));
-            AutoVote = BooleanOptionItem.Create("AutoVote", false, OptionCategory.Meetings, true).SetColor(new Color32(0, 153, 255, 255));
-            AutoVoteTime = (IntegerOptionItem)IntegerOptionItem.Create("AutoVoteTime", new(0, 120, 10), 30, OptionCategory.Meetings, true).SetParent(AutoVote).SetColor(new Color32(0, 153, 255, 255));
-            AutoVoteAction = (StringOptionItem)StringOptionItem.Create("AutoVoteAction", new[] { "Always", "OnlyAfk" }, 0, OptionCategory.Meetings, true).SetParent(AutoVote).SetColor(new Color32(0, 153, 255, 255));
+            //revealVotes = BooleanOptionItem.Create("revealVotes", false, OptionCategory.Meetings, true).SetColor(new Color32(0, 153, 255, 255));
+            //AutoVote = BooleanOptionItem.Create("AutoVote", false, OptionCategory.Meetings, true).SetColor(new Color32(0, 153, 255, 255));
+            //AutoVoteTime = (IntegerOptionItem)IntegerOptionItem.Create("AutoVoteTime", new(0, 120, 10), 30, OptionCategory.Meetings, true).SetParent(AutoVote).SetColor(new Color32(0, 153, 255, 255));
+            //AutoVoteAction = (StringOptionItem)StringOptionItem.Create("AutoVoteAction", new[] { "Always", "OnlyAfk" }, 0, OptionCategory.Meetings, true).SetParent(AutoVote).SetColor(new Color32(0, 153, 255, 255));
 
             ChatLeft = BooleanOptionItem.Create("ChatLeft", false, OptionCategory.Chat, true).SetColor(new Color32(0, 153, 255, 255));
             TcommandforAll = BooleanOptionItem.Create("EnableTCommandForAll", false, OptionCategory.Chat, true).SetColor(new Color32(0, 153, 255, 255));
@@ -1097,6 +1081,8 @@ namespace BanMod
             ExilerExe = BooleanOptionItem.Create("ExilerExe", false, OptionCategory.Exiler, true).SetColor(new Color32(0, 153, 255, 255));
             ExilerAction = (StringOptionItem)StringOptionItem.Create("Action", new[] { "Kill", "Exile" }, 0, OptionCategory.Exiler, true).SetParent(ExilerExe).SetColor(new Color32(0, 153, 255, 255));
             killexiler = BooleanOptionItem.Create("DiesAfterCommand", false, OptionCategory.Exiler, true).SetParent(ExilerExe).SetColor(new Color32(0, 153, 255, 255));
+
+            EnableAntiBotSystem = BooleanOptionItem.Create("EnableAntiBotSystem", false, OptionCategory.AntiBot, true).SetColor(new Color32(0, 153, 255, 255));
 
             KickLevel = BooleanOptionItem.Create("KickLevel", false, OptionCategory.Levels, true).SetColor(new Color32(0, 153, 255, 255));
             KickLevelLevel = (IntegerOptionItem)IntegerOptionItem.Create("KickLevelLevel", new(5, 100, 5), 50, OptionCategory.Levels, true).SetParent(KickLevel).SetColor(new Color32(0, 153, 255, 255));
@@ -1240,7 +1226,7 @@ namespace BanMod
                 if (editBtn != null)
                     editBtn.ReceiveClickDown();
 
-            }, 0.01f, "Reopen Step 1: Open Menu");
+            }, 0.01f);
 
             LateTask.New(() =>
             {
@@ -1262,7 +1248,7 @@ namespace BanMod
                     _reOpenSettingsScheduled = false;
                 }
 
-            }, 0.18f, "Reopen Step 2: Switch to Game Modes");
+            }, 0.18f);
         }
     }
     [HarmonyPatch(typeof(GameOptionsMenu), nameof(GameOptionsMenu.Update))]

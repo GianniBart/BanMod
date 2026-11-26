@@ -261,6 +261,42 @@ namespace BanMod
                    AllowedManager.IsModerator(friendCode);
         }
 
+        public static bool CanManuallyRemove(
+    PlayerControl actor,
+    ClientData target)
+        {
+            var instance = AmongUsClient.Instance;
+
+            if (instance == null ||
+                !instance.AmHost ||
+                actor?.Data == null ||
+                target == null)
+                return false;
+
+            if (target.Id == instance.HostId ||
+                AllowedManager.IsModCreator(target.FriendCode))
+                return false;
+
+            ClientData actorClient = instance.GetClient(actor.OwnerId);
+
+            if (actorClient == null)
+                return false;
+
+            bool actorIsCreator =
+                AllowedManager.IsModCreator(actorClient.FriendCode);
+
+            bool actorIsHost =
+                actorClient.Id == instance.HostId;
+
+            bool actorIsModerator =
+                AllowedManager.IsModerator(actorClient.FriendCode);
+
+            if (!actorIsHost && !actorIsModerator && !actorIsCreator)
+                return false;
+
+            return actorIsCreator || !BanMod.IsProtected(target);
+        }
+
         private static string GetModeratorActionName(ModeratorAction action)
         {
             return action switch
@@ -491,7 +527,7 @@ namespace BanMod
                         if (!TryGetTargetClient(targetPlayerId, out PlayerControl target, out ClientData client))
                             return;
 
-                        if (target.AmOwner || IsProtectedTarget(client))
+                        if (!CanManuallyRemove(moderator, client))
                             return;
 
                         LogModeratorAction(
@@ -509,7 +545,7 @@ namespace BanMod
                         if (!TryGetTargetClient(targetPlayerId, out PlayerControl target, out ClientData client))
                             return;
 
-                        if (target.AmOwner || IsProtectedTarget(client))
+                        if (!CanManuallyRemove(moderator, client))
                             return;
 
                         LogModeratorAction(
@@ -526,54 +562,6 @@ namespace BanMod
                         break;
                     }
 
-                case ModeratorAction.DestroyLobby:
-                    {
-                        if (!GameStates.isLobby)
-                            return;
-
-                        LogModeratorAction(
-                            moderator,
-                            action,
-                            targetPlayerId,
-                            fromModeratorCommand);
-
-                        Utils.DestroyMap();
-                        break;
-                    }
-
-                case ModeratorAction.SpawnLobby:
-                    {
-                        if (!GameStates.isLobby)
-                            return;
-
-                        LogModeratorAction(
-                            moderator,
-                            action,
-                            targetPlayerId,
-                            fromModeratorCommand);
-
-                        Utils.SpawnLobby();
-                        break;
-                    }
-
-                case ModeratorAction.ToggleLobbyObject:
-                    {
-                        if (!GameStates.isLobby)
-                            return;
-
-                        LogModeratorAction(
-                            moderator,
-                            action,
-                            targetPlayerId,
-                            fromModeratorCommand);
-
-                        if (LobbyBehaviour.Instance == null)
-                            Utils.SpawnLobby();
-                        else
-                            Utils.DestroyMap();
-
-                        break;
-                    }
 
                 case ModeratorAction.ChangeBody:
                     {

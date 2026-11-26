@@ -126,17 +126,9 @@ public static class VanillaDeviceBlocker
             }
         };
 
-    private static bool IsJbMode()
-    {
-        return Options.GameMode != null &&
-               Options.GameMode.GetValue(GameModeType.JBMode);
-    }
 
     private static bool ShouldBlock(DeviceType type)
     {
-        if (IsJbMode())
-            return true;
-
         switch (type)
         {
             case DeviceType.Cameras:

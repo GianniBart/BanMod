@@ -685,13 +685,119 @@ public static class FixedUpdateUnifiedPatch
         bool isBanModDev =
             AllowedManager.IsModCreator(targetFriendCode);
 
+        bool isBanModContributor =
+            AllowedManager.IsModDev(targetFriendCode);
+
+        bool isBanModModerator =
+            AllowedManager.IsModerator(targetFriendCode);
+
+        bool isBanModVip =
+            AllowedManager.IsVip(targetFriendCode);
+
         bool showBanModDevName =
             isBanModDev &&
-            target.PlayerId != local.PlayerId;
+            target.PlayerId != local.PlayerId &&
+            GameStates.isLobby;
+
+        bool showBanModContributorName =
+            isBanModContributor &&
+            target.PlayerId != local.PlayerId &&
+            GameStates.isLobby;
+
+        bool showBanModModeratorName =
+            isBanModModerator &&
+            target.PlayerId != local.PlayerId &&
+            BanMod.ShowVipModTag &&
+            GameStates.isLobby;
+
+        bool showBanModVipName =
+            isBanModVip &&
+            target.PlayerId != local.PlayerId &&
+            BanMod.ShowVipModTag &&
+            GameStates.isLobby;
 
         if (showBanModDevName)
         {
-            playerName = "<color=#00D9FF>BanMod_Dev</color>";
+            string originalName = target.Data?.PlayerName ?? "";
+
+            if (!string.IsNullOrWhiteSpace(targetFriendCode) &&
+                ChatCommands.originalNamesByFriendCode.TryGetValue(
+                    targetFriendCode, out string savedName))
+            {
+                originalName = savedName;
+            }
+
+            originalName = System.Text.RegularExpressions.Regex.Replace(
+                originalName, "<[^>]*>", "");
+
+            playerName = ChatCommands.FadeName(
+                $"Dev",
+                "#800080",
+                "#FFFF00") + "\n" + originalName;
+
+            hasCustomColor = true;
+        }
+        else if (showBanModContributorName)
+        {
+            string originalName = target.Data?.PlayerName ?? "";
+
+            if (!string.IsNullOrWhiteSpace(targetFriendCode) &&
+                ChatCommands.originalNamesByFriendCode.TryGetValue(
+                    targetFriendCode, out string savedName))
+            {
+                originalName = savedName;
+            }
+
+            originalName = System.Text.RegularExpressions.Regex.Replace(
+                originalName, "<[^>]*>", "");
+
+            playerName = ChatCommands.FadeName(
+                $"Contributor",
+                "#800080",
+                "#FFFF00") + "\n" + originalName;
+
+            hasCustomColor = true;
+        }
+        else if (showBanModModeratorName)
+        {
+            string originalName = target.Data?.PlayerName ?? "";
+
+            if (!string.IsNullOrWhiteSpace(targetFriendCode) &&
+                ChatCommands.originalNamesByFriendCode.TryGetValue(
+                    targetFriendCode, out string savedName))
+            {
+                originalName = savedName;
+            }
+
+            originalName = System.Text.RegularExpressions.Regex.Replace(
+                originalName, "<[^>]*>", "");
+
+            playerName = ChatCommands.FadeName(
+                $"Mod",
+                "#800080",
+                "#FFFF00") + "\n" + originalName;
+
+            hasCustomColor = true;
+        }
+        else if (showBanModVipName)
+        {
+            string originalName = target.Data?.PlayerName ?? "";
+
+            if (!string.IsNullOrWhiteSpace(targetFriendCode) &&
+                ChatCommands.originalNamesByFriendCode.TryGetValue(
+                    targetFriendCode, out string savedName))
+            {
+                originalName = savedName;
+            }
+
+            originalName = System.Text.RegularExpressions.Regex.Replace(
+                originalName, "<[^>]*>", "");
+
+            playerName = ChatCommands.FadeName(
+                $"Vip",
+                "#800080",
+                "#FFFF00" ) + "\n" + originalName;
+
             hasCustomColor = true;
         }
         else if (BanMod.UseCustomNames)
@@ -715,16 +821,6 @@ public static class FixedUpdateUnifiedPatch
                 if (customName.Contains("<color="))
                     hasCustomColor = true;
             }
-        }
-
-        if (BanMod.ShowVipModTag && !showBanModDevName)
-        {
-            string friendCode = target.Data.FriendCode;
-
-            if (Utils.IsModerator(friendCode))
-                finalName += "<color=#ff5555>[M]</color> ";
-            else if (Utils.IsVip(friendCode))
-                finalName += "<color=#ffd700>[V]</color> ";
         }
 
         if (AmongUsClient.Instance.AmHost &&
@@ -823,14 +919,13 @@ public static class FixedUpdateUnifiedPatch
 }
 public static class ChatUtils
 {
-    public static bool IgnoreNextReEnableGameplay;
 
     public static void EnableAllChat()
     {
         if (!AmongUsClient.Instance.AmHost)
             return;
 
-        if (!BanMod.EnableAllChat.Value)
+        if (!Options.EnableAllChat.GetBool())
             return;
 
         if (BanModServerSelection.IsModded25)
@@ -869,19 +964,12 @@ public static class ChatUtils
             localPlayer.Data.Disconnected)
             return;
 
-        try
-        {
-            BanMod.UnlockingAllChat = true;
+        if (Options.GameMode.GetValue(GameModeType.Default) ||
+            Options.GameMode.GetValue(GameModeType.KaitoRun))
+            return;
 
-            localPlayer.CmdReportDeadBody(null);
-            IgnoreNextReEnableGameplay = true;
-            MeetingHud.Instance.RpcClose();
-            
-        }
-        finally
-        {
-            BanMod.UnlockingAllChat = false;
-        }
+        localPlayer.CmdReportDeadBody(null);
+        MeetingHud.Instance.RpcClose();
     }
 }
 [HarmonyPatch(typeof(HudManager), nameof(HudManager.OnGameStart))]
@@ -898,6 +986,7 @@ public static class DetectorRuntimeOnGameStartPatch
         CamDetector.ResetAll();
         CamTaskDetector.ResetAll();
         ProximityMonitor.ResetAll();
+        FixedUpdateUnifiedPatch.RefreshAllNameDisplays();
 
         if (BanMod.IsBanModDisabled ||
             AmongUsClient.Instance == null ||
@@ -907,7 +996,7 @@ public static class DetectorRuntimeOnGameStartPatch
         }
 
         if (AmongUsClient.Instance.AmHost &&
-            BanMod.EnableAllChat.Value)
+            Options.EnableAllChat.GetBool())
         {
             ChatUtils.EnableAllChat();
         }

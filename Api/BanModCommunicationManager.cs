@@ -223,7 +223,7 @@ namespace BanMod
 
             if (request.responseCode == 401)
             {
-                BanModApiTokenManager.ClearToken();
+                BanModApiTokenManager.ClearToken(request);
                 resultMessage = "Unauthorized. Token cleared, try again.";
             }
             else if (request.result == UnityWebRequest.Result.Success)
@@ -342,7 +342,7 @@ namespace BanMod
 
             if (request.responseCode == 401)
             {
-                BanModApiTokenManager.ClearToken();
+                BanModApiTokenManager.ClearToken(request);
                 request.Dispose();
                 callback?.Invoke(new List<ReportSummary>(), "Unauthorized. Token cleared, try again.");
                 yield break;
@@ -403,7 +403,7 @@ namespace BanMod
                            ExtractJsonBool(responseText, "success", true);
 
             if (request.responseCode == 401)
-                BanModApiTokenManager.ClearToken();
+                BanModApiTokenManager.ClearToken(request);
 
             string message = success
                 ? "Read."
@@ -444,7 +444,7 @@ namespace BanMod
 
             if (request.responseCode == 401)
             {
-                BanModApiTokenManager.ClearToken();
+                BanModApiTokenManager.ClearToken(request);
                 resultMessage = "Unauthorized. Token cleared, try again.";
             }
             else if (request.result == UnityWebRequest.Result.Success)
@@ -502,7 +502,7 @@ namespace BanMod
 
             if (request.responseCode == 401)
             {
-                BanModApiTokenManager.ClearToken();
+                BanModApiTokenManager.ClearToken(request);
                 resultMessage = "Unauthorized. Token cleared, try again.";
             }
             else if (request.responseCode == 403)
@@ -571,7 +571,7 @@ namespace BanMod
 
                 if (lastCode == 401)
                 {
-                    BanModApiTokenManager.ClearToken();
+                    BanModApiTokenManager.ClearToken(request);
                     request.Dispose();
                     callback?.Invoke(false, "Unauthorized. Token cleared, try again.");
                     yield break;
@@ -679,7 +679,7 @@ namespace BanMod
 
             if (request.responseCode == 401)
             {
-                BanModApiTokenManager.ClearToken();
+                BanModApiTokenManager.ClearToken(request);
                 resultMessage = "Unauthorized. Token cleared, try again.";
             }
             else if (request.responseCode == 403)

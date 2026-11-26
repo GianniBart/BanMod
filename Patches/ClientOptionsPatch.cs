@@ -21,7 +21,6 @@ public static class OptionsMenuBehaviourStartPatch
     private static ClientOptionItem EnableGhostChat;
     private static ClientOptionItem ChatOffIfImpostor;
     private static ClientOptionItem Resize_Player;
-    private static ClientOptionItem EnableAllChat;
     private static ClientOptionItem NoGameEnd;
     private static ClientOptionItem AddBanToList;
     private static ClientOptionItem ExcludeFriends;
@@ -30,7 +29,6 @@ public static class OptionsMenuBehaviourStartPatch
 
     private static ClientOptionItem AnniversaryDecorations;
     private static ClientOptionItem HalloweenDecorations;
-    private static ClientOptionItem CustomSkin;
 
     public static void Postfix(OptionsMenuBehaviour __instance)
     {
@@ -68,9 +66,6 @@ public static class OptionsMenuBehaviourStartPatch
 
         if (EnableGhostChat == null || EnableGhostChat.ToggleButton == null)
             EnableGhostChat = ClientOptionItem.Create("EnableGhostChat", BanMod.EnableGhostChat, __instance);
-        
-        if (EnableAllChat == null || EnableAllChat.ToggleButton == null)
-            EnableAllChat = ClientOptionItem.Create("EnableAllChat", BanMod.EnableAllChat, __instance);
 
         if (ChatOffIfImpostor == null || ChatOffIfImpostor.ToggleButton == null)
             ChatOffIfImpostor = ClientOptionItem.Create("ChatOffIfImpostor", BanMod.ChatOffIfImpostor, __instance);
@@ -128,8 +123,6 @@ public static class OptionsMenuBehaviourStartPatch
             }
         }
 
-        if (CustomSkin == null || CustomSkin.ToggleButton == null)
-            CustomSkin = ClientOptionItem.Create("CustomSkin", BanMod.CustomSkin, __instance);
         if (SwitchVanilla == null || SwitchVanilla.ToggleButton == null)
         {
             SwitchVanilla = ClientOptionItem.Create(

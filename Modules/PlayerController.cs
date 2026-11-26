@@ -86,9 +86,6 @@ namespace BanMod
 
         private static void SendVisualRpc(byte targetPlayerId, float scale, byte bodyType, bool selfOverride)
         {
-            if (AmongUsClient.Instance == null || PlayerControl.LocalPlayer == null)
-                return;
-
             BanModSyncApi.SendSyncPlayerVisual(
                 targetPlayerId,
                 scale,

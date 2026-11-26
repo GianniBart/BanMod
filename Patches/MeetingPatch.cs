@@ -133,15 +133,6 @@ public static class CombinedReportDeadBodyPatch
         if (!AmongUsClient.Instance.AmHost)
             return true;
 
-        if (BanMod.UnlockingAllChat && target == null && PlayerControl.LocalPlayer != null && __instance.PlayerId == PlayerControl.LocalPlayer.PlayerId)
-        {
-            BMLogger.Info(
-                "[AllChat] Consentito report artificiale per abilitare la chat.",
-                "AllChat");
-
-            return true;
-        }
-
         if (Options.DisableMeetingsAndReports.GetBool())
             return false;
 
@@ -197,8 +188,6 @@ public static class CombinedReportDeadBodyPatch
         }
 
         if (__instance.Data?.Role?.TeamType == RoleTeamTypes.Impostor && gameMode == GameModeType.KaitoRun)
-            return false;
-        if (__instance.Data?.Role?.TeamType == RoleTeamTypes.Impostor && gameMode == GameModeType.JBMode)
             return false;
 
         if (gameMode == GameModeType.SnS) return false;
@@ -288,9 +277,6 @@ public static class PlayerVoteAreaPatch
 [HarmonyPatch(typeof(MeetingHud), nameof(MeetingHud.Update))]
 public static class AutoSkipVotePatch
 {
-    private static float timer = 0f;
-    private static bool hasVoted = false;
-
     public static void Postfix(MeetingHud __instance)
     {
         if (__instance == null) return;
@@ -303,217 +289,9 @@ public static class AutoSkipVotePatch
         if (!AmongUsClient.Instance.AmHost)
             return;
 
-        if (AmongUsClient.Instance.AmHost && HostAfkManager.IsHostAfk)
-        {
-            var myState = __instance.playerStates[PlayerControl.LocalPlayer.PlayerId];
-            if (myState != null && !myState.DidVote && !myState.AmDead)
-            {
-                timer += Time.deltaTime;
-                if (timer >= 60f) 
-                {
-                    __instance.Confirm(PlayerVoteArea.SkippedVote);
-                    hasVoted = true;
-                    return; 
-                }
-            }
-        }
-
-        if (!Options.AutoVote.GetBool()) return;
-        if (PlayerControl.LocalPlayer.Data.IsDead) return;
-
-        if (__instance.CurrentState != MeetingHud.MeetingStates.NotVoted &&
-            __instance.CurrentState != MeetingHud.MeetingStates.Voted)
-        {
-            timer = 0f;
-            hasVoted = false;
-            return;
-        }
-
-        if (__instance.playerStates[PlayerControl.LocalPlayer.PlayerId].DidVote)
-        {
-            hasVoted = true;
-            return;
-        }
-
-        timer += Time.deltaTime;
-
-        int timeout = Options.AutoVoteTime.GetInt();
-        int action = Options.AutoVoteAction.GetValue(); 
-        bool isAfk = AFKDetector.IsAfk(PlayerControl.LocalPlayer);
-
-        if (!hasVoted && timer >= timeout)
-        {
-            if (action == 0 || (action == 1 && isAfk))
-            {
-                __instance.Confirm(PlayerVoteArea.SkippedVote);
-                hasVoted = true;
-            }
-        }
-    }
-}
-[HarmonyPatch(typeof(MeetingHud), nameof(MeetingHud.CastVote))]
-public static class VoteToSpecialActionPatch
-{
-    private const float SpecialVoteSeconds = 15f;
-
-    private static readonly Dictionary<MeetingHud, float> VotingStartTimes = new();
-
-    private static readonly Dictionary<MeetingHud, HashSet<byte>> UsedSpecialVotePlayers = new();
-
-    public static bool Prefix(
-    MeetingHud __instance,
-    PlayerId srcPlayerId,
-    PlayerId suspectPlayerId)
-    {
-        if (!AmongUsClient.Instance.AmHost)
-            return true;
-
-        if (!Options.specialvote.GetBool())
-            return true;
-
-        byte sourceId = srcPlayerId.Value;
-        byte suspectId = suspectPlayerId.Value;
-
-        PlayerControl voter = Utils.GetPlayerById(sourceId);
-
-        if (voter == null || voter.Data == null)
-            return true;
-
-        string voterFriendCode = voter.Data.FriendCode;
-
-        if (!AllowedManager.IsVip(voterFriendCode))
-            return true;
-
-        if (!IsInSpecialVoteTime(__instance))
-            return true;
-
-        if (HasUsedSpecialVote(__instance, sourceId))
-            return true;
-
-        bool actionExecuted =
-            RolesCommand.Cmd(sourceId, suspectId);
-
-        if (!actionExecuted)
-            return true;
-
-        MarkSpecialVoteUsed(__instance, sourceId);
-
-        __instance.RpcClearVote(srcPlayerId);
-
-        return false;
-    }
-
-    public static void SetVotingStart(MeetingHud meetingHud)
-    {
-        if (meetingHud == null) return;
-
-        VotingStartTimes[meetingHud] = Time.realtimeSinceStartup;
-
-        UsedSpecialVotePlayers[meetingHud] = new HashSet<byte>();
-    }
-
-    public static void ClearVotingStart(MeetingHud meetingHud)
-    {
-        if (meetingHud == null) return;
-
-        VotingStartTimes.Remove(meetingHud);
-        UsedSpecialVotePlayers.Remove(meetingHud);
-    }
-
-    private static bool IsInSpecialVoteTime(MeetingHud meetingHud)
-    {
-        if (meetingHud == null)
-            return false;
-
-        if (meetingHud.CurrentState != MeetingHud.MeetingStates.NotVoted &&
-            meetingHud.CurrentState != MeetingHud.MeetingStates.Voted)
-        {
-            return false;
-        }
-
-        if (!VotingStartTimes.TryGetValue(meetingHud, out float votingStartedAt))
-        {
-            votingStartedAt = Time.realtimeSinceStartup;
-            VotingStartTimes[meetingHud] = votingStartedAt;
-
-            if (!UsedSpecialVotePlayers.ContainsKey(meetingHud))
-            {
-                UsedSpecialVotePlayers[meetingHud] = new HashSet<byte>();
-            }
-        }
-
-        float elapsed = Time.realtimeSinceStartup - votingStartedAt;
-
-        return elapsed >= 0f && elapsed <= SpecialVoteSeconds;
-    }
-
-    private static bool HasUsedSpecialVote(MeetingHud meetingHud, byte playerId)
-    {
-        if (meetingHud == null) return false;
-
-        if (!UsedSpecialVotePlayers.TryGetValue(meetingHud, out HashSet<byte> usedPlayers))
-        {
-            return false;
-        }
-
-        return usedPlayers.Contains(playerId);
-    }
-
-    private static void MarkSpecialVoteUsed(MeetingHud meetingHud, byte playerId)
-    {
-        if (meetingHud == null) return;
-
-        if (!UsedSpecialVotePlayers.TryGetValue(meetingHud, out HashSet<byte> usedPlayers))
-        {
-            usedPlayers = new HashSet<byte>();
-            UsedSpecialVotePlayers[meetingHud] = usedPlayers;
-        }
-
-        usedPlayers.Add(playerId);
     }
 }
 
-[HarmonyPatch(typeof(MeetingHud), nameof(MeetingHud.Update))]
-public static class MeetingHudVotingStartTrackerPatch
-{
-    private static readonly Dictionary<MeetingHud, MeetingHud.MeetingStates> LastStates = new();
-
-    public static void Postfix(MeetingHud __instance)
-    {
-        if (__instance == null) return;
-
-        MeetingHud.MeetingStates current = __instance.CurrentState;
-
-        if (!LastStates.TryGetValue(__instance, out MeetingHud.MeetingStates last))
-        {
-            LastStates[__instance] = current;
-
-            if (current == MeetingHud.MeetingStates.NotVoted)
-            {
-                VoteToSpecialActionPatch.SetVotingStart(__instance);
-            }
-
-            return;
-        }
-
-        if (last != MeetingHud.MeetingStates.NotVoted &&
-            current == MeetingHud.MeetingStates.NotVoted)
-        {
-            VoteToSpecialActionPatch.SetVotingStart(__instance);
-        }
-
-        LastStates[__instance] = current;
-    }
-}
-
-[HarmonyPatch(typeof(MeetingHud), nameof(MeetingHud.OnDestroy))]
-public static class MeetingHudVotingStartCleanupPatch
-{
-    public static void Postfix(MeetingHud __instance)
-    {
-        VoteToSpecialActionPatch.ClearVotingStart(__instance);
-    }
-}
 public static class LastImpostorMeetingEndDelay
 {
     private static bool delayRunning = false;
@@ -729,22 +507,14 @@ public static class ReEnableGameplayChatPatch
         if (!AmongUsClient.Instance.AmHost)
             return;
 
-        if (!BanMod.EnableAllChat.Value)
+        if (!Options.EnableAllChat.GetBool())
             return;
 
-        if (BanModServerSelection.IsVanilla &&
-            ChatUtils.IgnoreNextReEnableGameplay)
-        {
-            ChatUtils.IgnoreNextReEnableGameplay = false;
+        if (!BanModServerSelection.IsModded25)
             return;
-        }
 
         LateTask.New(() =>
         {
-            if (!AmongUsClient.Instance.AmHost ||
-                !BanMod.EnableAllChat.Value)
-                return;
-
             ChatUtils.EnableAllChat();
 
         }, 0.5f);

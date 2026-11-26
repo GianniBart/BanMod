@@ -1050,7 +1050,7 @@ internal static class PnsPhantomMovementPatch
             player.RpcMurderPlayer(player, true);
         }
     }
-    private static void RegisterMisfire(
+    public static void RegisterMisfire(
         PlayerControl player)
     {
         if (player == null ||
@@ -1231,24 +1231,42 @@ internal static class PnsPunishmentKillPatch
     [HarmonyPostfix]
     public static void Postfix(
         PlayerControl __instance,
-        [HarmonyArgument(1)]
-        MurderResultFlags resultFlags)
+        [HarmonyArgument(0)] PlayerControl target,
+        [HarmonyArgument(1)] MurderResultFlags resultFlags)
     {
         if (AmongUsClient.Instance == null ||
             !AmongUsClient.Instance.AmHost ||
+            BanMod.IsBanModDisabled ||
             Options.GameMode == null ||
-            !Options.GameMode.GetValue(GameModeType.PnS))
+            !Options.GameMode.GetValue(GameModeType.PnS) ||
+            GameStates.isHideNSeek ||
+            IntroCutscene.Instance != null)
         {
             return;
         }
 
-        if (!resultFlags.HasFlag(
-                MurderResultFlags.Succeeded))
+        if (__instance == null ||
+            __instance.Data == null ||
+            target == null ||
+            target.Data == null ||
+            __instance.PlayerId == target.PlayerId ||
+            !resultFlags.HasFlag(MurderResultFlags.Succeeded))
         {
             return;
         }
 
-        PnsPhantomMovementPatch
-            .HandleKillDuringPunishment(__instance);
+        if (PnsFlashUtility.IsFlashing(__instance))
+        {
+            PnsPhantomMovementPatch
+                .HandleKillDuringPunishment(__instance);
+
+            return;
+        }
+
+        if (NoKillCommsUtility.IsMisfire(__instance))
+        {
+            PnsPhantomMovementPatch
+                .RegisterMisfire(__instance);
+        }
     }
 }

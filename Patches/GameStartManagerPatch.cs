@@ -395,6 +395,7 @@ public class GameStartManagerBeginPatch
             __instance.countDownTimer = 5f;
         }
         __instance.startState = GameStartManager.StartingStates.Countdown;
+        LobbyDepartureGuard.OnStart(__instance);
         __instance.GameSizePopup.SetActive(false);
         DataManager.Player.Onboarding.AlwaysShowMinPlayerWarning = false;
         DataManager.Player.Onboarding.ViewedMinPlayerWarning = true;
@@ -432,5 +433,16 @@ public class GameStartManagerBeginPatch
             var mapsId = randomMaps[rand.Next(randomMaps.Count)];
             BanMod.NormalOptions.MapId = mapsId;
         }
+    }
+}
+[HarmonyPatch(typeof(GameStartManager), nameof(GameStartManager.Start))]
+public static class VoteBanTrackerResetLobbyPatch
+{
+    public static void Prefix()
+    {
+        VoteBanTracker.Reset();
+
+        BMLogger.LogInfo(
+            "[VoteBan] Conteggio Kicks azzerato per la nuova lobby.");
     }
 }

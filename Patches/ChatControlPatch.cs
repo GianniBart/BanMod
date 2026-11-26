@@ -208,8 +208,19 @@ class ChatControllerUpdatePatch
         if ((Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) && Input.GetKeyDown(KeyCode.C))
             ClipboardHelper.PutClipboardString(chat.freeChatField.textArea.text);
 
+        //if ((Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) && Input.GetKeyDown(KeyCode.V))
+        //    chat.freeChatField.textArea.SetText(chat.freeChatField.textArea.text + GUIUtility.systemCopyBuffer);
         if ((Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) && Input.GetKeyDown(KeyCode.V))
-            chat.freeChatField.textArea.SetText(chat.freeChatField.textArea.text + GUIUtility.systemCopyBuffer);
+        {
+            if (BanModServerSelection.IsModded25)
+            {
+                BanModSymbolPicker.PasteUnicodeFromClipboard(chat.freeChatField.textArea, GUIUtility.systemCopyBuffer);
+            }
+            else
+            {
+                chat.freeChatField.textArea.SetText(chat.freeChatField.textArea.text + GUIUtility.systemCopyBuffer);
+            }
+        }
 
         if ((Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) && Input.GetKeyDown(KeyCode.X))
         {
@@ -360,7 +371,7 @@ class ChatSendPatch
         if (!quickChatReady && string.IsNullOrWhiteSpace(freeMessage))
             return false;
 
-        if (__instance.timeSinceLastMessage <= 1.5f && BanModServerSelection.IsVanilla)
+        if (__instance.timeSinceLastMessage < 1.5f && BanModServerSelection.IsVanilla)
         {
             if (HudManager.Instance?.Notifier != null)
             {
@@ -372,19 +383,8 @@ class ChatSendPatch
             return false;
         }
 
-        if (!MessageBlocker.CanSendMessage())
-        {
-            if (HudManager.Instance?.Notifier != null)
-            {
-                NotificationPopper_AddInfoMessagePatch.AddInfoMessage(
-                    HudManager.Instance.Notifier,
-                    Translator.GetString("Waitasecond"));
-            }
-
-            return false;
-        }
-
-        MessageBlocker.UpdateLastMessageTime();
+        // Manual chat uses the game's own cooldown above. MessageBlocker belongs
+        // to automatic messages: poll announcements must not lock out human votes.
         return true;
     }
 }
@@ -553,6 +553,9 @@ public static class ChatController_AddChat_GhostChatPatch
     {
         if (!BanMod.EnableGhostChat.Value)
             return false;
+
+        if (GameManager.Instance.IsHideAndSeek())
+            return true;
 
         switch (Options.GameMode.Selected)
         {

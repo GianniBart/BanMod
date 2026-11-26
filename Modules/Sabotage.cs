@@ -392,9 +392,6 @@ public static class SabotageSystemType_UpdateSystem_Patch1
         if (!AmongUsClient.Instance.AmHost)
             return true;
 
-        if (Options.GameMode.GetValue(GameModeType.JBMode))
-            return true;
-
         if (player == null || player.Data == null || player.Data.Role == null)
             return false;
 
@@ -443,9 +440,6 @@ public static class LogicGameFlowNormal_CheckEndCriteria_Patch1
 {
     public static void Prefix()
     {
-        if (Options.GameMode.GetValue(GameModeType.JBMode))
-            return;
-
         if (!AmongUsClient.Instance.AmHost)
             return;
 

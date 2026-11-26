@@ -343,9 +343,18 @@ public static class BlockedPlayersBulkManager
 
         CancelRequested = false;
 
-        ui.StartCoroutine(
-            UnblockSelectedCoroutine(ui)
-        );
+        try
+        {
+            ui.StartCoroutine(
+                UnblockSelectedCoroutine(ui)
+            );
+        }
+        catch (Exception ex)
+        {
+            BulkRunning = false;
+            CancelRequested = false;
+            Debug.LogError("[BlockedPlayersBulk] Unable to start unblock coroutine: " + ex);
+        }
     }
 
     private static IEnumerator UnblockSelectedCoroutine(
@@ -383,18 +392,25 @@ public static class BlockedPlayersBulkManager
 
         while (initialPause > 0f)
         {
-            if (CancelRequested)
+            if (CancelRequested || manager == null || ui == null)
                 break;
 
             initialPause -= Time.unscaledDeltaTime;
             yield return null;
         }
 
+        if (manager == null || ui == null)
+        {
+            BulkRunning = false;
+            CancelRequested = false;
+            yield break;
+        }
+
         for (int i = 0;
              i < targets.Count;
              i++)
         {
-            if (CancelRequested)
+            if (CancelRequested || manager == null || ui == null)
                 break;
 
             string puid =
@@ -412,16 +428,28 @@ public static class BlockedPlayersBulkManager
                     completed = true;
                 };
 
-            manager.UnblockPlayer(
-                puid,
-                callback
-            );
+            try
+            {
+                manager.UnblockPlayer(
+                    puid,
+                    callback
+                );
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError("[BlockedPlayersBulk] UnblockPlayer failed: " + ex);
+                completed = true;
+                success = false;
+            }
 
             float timeout = 10f;
 
             while (!completed &&
                    timeout > 0f)
             {
+                if (manager == null || ui == null)
+                    break;
+
                 timeout -= Time.unscaledDeltaTime;
                 yield return null;
             }
@@ -445,7 +473,7 @@ public static class BlockedPlayersBulkManager
 
             while (pause > 0f)
             {
-                if (CancelRequested)
+                if (CancelRequested || manager == null || ui == null)
                     break;
 
                 pause -= Time.unscaledDeltaTime;
@@ -456,10 +484,13 @@ public static class BlockedPlayersBulkManager
         BulkRunning = false;
         CancelRequested = false;
 
-        CleanupSelection(manager);
+        if (manager != null)
+            CleanupSelection(manager);
+
         RefreshVisibleLabels();
 
-        RefreshFromServer(ui);
+        if (ui != null)
+            RefreshFromServer(ui);
     }
 
     private static void RemoveBlockedPlayerFromLocalList(
@@ -505,16 +536,26 @@ public static class BlockedPlayersBulkManager
         Action callback =
             () =>
             {
+                if (manager == null || ui == null)
+                    return;
+
                 CleanupSelection(manager);
                 ui.UpdateFriendBars();
             };
 
-        ui.StartCoroutine(
-            manager.RefreshFriendsList(
-                callback,
-                false
-            )
-        );
+        try
+        {
+            ui.StartCoroutine(
+                manager.RefreshFriendsList(
+                    callback,
+                    false
+                )
+            );
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError("[BlockedPlayersBulk] RefreshFriendsList failed: " + ex);
+        }
     }
 
     private static void CleanupSelection(
@@ -655,8 +696,13 @@ public static class BlockedPlayersBulkManager
     private static void RebuildListRows(
         FriendsListUI ui)
     {
-        if (ui == null)
+        if (ui == null ||
+            ui.BlockedPlayerBar == null ||
+            ui.BlockedArea == null ||
+            ui.BlockedScroller == null)
+        {
             return;
+        }
 
         FriendsListManager manager =
             DestroyableSingleton<FriendsListManager>.Instance;
@@ -719,6 +765,9 @@ public static class BlockedPlayersBulkManager
                     ui.BlockedPlayerBar,
                     ui.BlockedArea.transform
                 );
+
+            if (bar == null)
+                continue;
 
             string friendCode =
                 player.FriendCode ??
@@ -822,6 +871,13 @@ public static class BlockedPlayersBulkManager
         int row,
         ControlAction action)
     {
+        if (ui == null ||
+            ui.BlockedPlayerBar == null ||
+            ui.BlockedArea == null)
+        {
+            return null;
+        }
+
         float y =
             ui.YStart -
             row * ui.YOffset;
@@ -831,6 +887,9 @@ public static class BlockedPlayersBulkManager
                 ui.BlockedPlayerBar,
                 ui.BlockedArea.transform
             );
+
+        if (bar == null)
+            return null;
 
         ControlBars[bar] = action;
         SpawnedBars.Add(bar);
@@ -874,7 +933,8 @@ public static class BlockedPlayersBulkManager
         FriendsListUI ui)
     {
         if (bar == null ||
-            ui == null)
+            ui == null ||
+            ui.BlockedScroller == null)
         {
             return;
         }

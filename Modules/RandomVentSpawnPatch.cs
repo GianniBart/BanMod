@@ -1,3 +1,4 @@
+
 using BepInEx.Unity.IL2CPP.Utils;
 using HarmonyLib;
 using System;
@@ -12,11 +13,21 @@ internal static class RandomVentSpawnManager
     private static bool AlreadyTriggered;
     private static bool Running;
 
+
+    // ============================================================
+    // RESET
+    // ============================================================
+
     public static void Reset()
     {
         AlreadyTriggered = false;
         Running = false;
     }
+
+
+    // ============================================================
+    // START
+    // ============================================================
 
     public static void TryStart()
     {
@@ -25,19 +36,32 @@ internal static class RandomVentSpawnManager
             if (AlreadyTriggered || Running)
                 return;
 
+
             bool randomVentSpawnEnabled =
-                Options.RandomVentSpawn != null &&
-                Options.RandomVentSpawn.GetBool() || 
-                Options.RandomVentSpawn1 != null &&
-                Options.RandomVentSpawn1.GetBool();
+                (
+                    Options.RandomVentSpawn != null &&
+                    Options.RandomVentSpawn.GetBool()
+                )
+                ||
+                (
+                    Options.RandomVentSpawn1 != null &&
+                    Options.RandomVentSpawn1.GetBool()
+                );
+
 
             bool randomVentSpawnFfaEnabled =
-                Options.RandomVentSpawnffa != null &&
-                Options.RandomVentSpawnffa.GetBool() &&
-                Options.GameMode.GetValue(GameModeType.FFA) ||
-                Options.RandomVentSpawnffa1 != null &&
-                Options.RandomVentSpawnffa1.GetBool() &&
-                Options.GameMode.GetValue(GameModeType.FFATeam);
+                (
+                    Options.RandomVentSpawnffa != null &&
+                    Options.RandomVentSpawnffa.GetBool() &&
+                    Options.GameMode.GetValue(GameModeType.FFA)
+                )
+                ||
+                (
+                    Options.RandomVentSpawnffa1 != null &&
+                    Options.RandomVentSpawnffa1.GetBool() &&
+                    Options.GameMode.GetValue(GameModeType.FFATeam)
+                );
+
 
             if (!randomVentSpawnEnabled &&
                 !randomVentSpawnFfaEnabled)
@@ -45,11 +69,13 @@ internal static class RandomVentSpawnManager
                 return;
             }
 
+
             if (AmongUsClient.Instance == null ||
                 !AmongUsClient.Instance.AmHost)
             {
                 return;
             }
+
 
             if (ShipStatus.Instance == null ||
                 HudManager.Instance == null)
@@ -57,6 +83,10 @@ internal static class RandomVentSpawnManager
                 return;
             }
 
+
+            // ====================================================
+            // VANILLA SERVER
+            // ====================================================
 
             if (BanModServerSelection.IsVanilla)
             {
@@ -66,8 +96,10 @@ internal static class RandomVentSpawnManager
                     return;
                 }
 
+
                 VentilationSystem system =
                     GetVentSystem();
+
 
                 if (system == null ||
                     system.PlayersInsideVents == null)
@@ -75,28 +107,50 @@ internal static class RandomVentSpawnManager
                     return;
                 }
 
+
                 AlreadyTriggered = true;
                 Running = true;
+
 
                 HudManager.Instance.StartCoroutine(
                     CoBootPlayersFromRandomVents()
                 );
 
+
                 return;
             }
 
 
+            // ====================================================
+            // MODDED SERVER
+            // ====================================================
+
             if (BanModServerSelection.IsModded25)
             {
-                if (ShipStatus.Instance.AllRooms == null)
+                List<Vector2> mapPoints =
+                    GetSavedSpawnPointsForCurrentMap();
+
+
+                if (mapPoints == null ||
+                    mapPoints.Count == 0)
+                {
+                    Debug.LogWarning(
+                        "[RandomSpawn] Nessun punto configurato " +
+                        "per questa mappa."
+                    );
+
                     return;
+                }
+
 
                 AlreadyTriggered = true;
                 Running = true;
 
+
                 HudManager.Instance.StartCoroutine(
-                    CoTeleportPlayersToRandomMapPositions()
+                    CoTeleportPlayersToSavedMapPositions()
                 );
+
 
                 return;
             }
@@ -106,20 +160,28 @@ internal static class RandomVentSpawnManager
             Running = false;
 
             Debug.LogError(
-                "[RandomSpawn] Start failed: " + ex
+                "[RandomSpawn] Start failed: " +
+                ex
             );
         }
     }
 
-    private static IEnumerator CoTeleportPlayersToRandomMapPositions()
+
+    // ============================================================
+    // MODDED TELEPORT COROUTINE
+    // ============================================================
+
+    private static IEnumerator CoTeleportPlayersToSavedMapPositions()
     {
         try
         {
             yield return null;
             yield return null;
 
+
             List<PlayerControl> players =
                 GetValidPlayers();
+
 
             if (players == null ||
                 players.Count == 0)
@@ -127,27 +189,33 @@ internal static class RandomVentSpawnManager
                 yield break;
             }
 
+
             bool isFfa =
                 Options.GameMode.GetValue(
                     GameModeType.FFA
                 );
 
 
-            if (!isFfa)
+            bool isFfaTeam =
+                Options.GameMode.GetValue(
+                    GameModeType.FFATeam
+                );
+
+
+            if (!isFfa &&
+                !isFfaTeam)
             {
                 TeleportPlayersFarApart(
                     players
                 );
             }
-
-
-
             else
             {
                 TeleportFfaPlayersByColor(
                     players
                 );
             }
+
 
             yield return null;
         }
@@ -158,19 +226,52 @@ internal static class RandomVentSpawnManager
     }
 
 
-    private static void TeleportPlayersFarApart(List<PlayerControl> players)
-    {
-        if (players == null || players.Count == 0)
-            return;
+    // ============================================================
+    // NORMAL MODE
+    // ============================================================
 
-        ShufflePlayers(players);
+    private static void TeleportPlayersFarApart(
+        List<PlayerControl> players)
+    {
+        if (players == null ||
+            players.Count == 0)
+        {
+            return;
+        }
+
+
+        List<Vector2> availablePoints =
+            GetSavedSpawnPointsForCurrentMap();
+
+
+        if (availablePoints == null ||
+            availablePoints.Count == 0)
+        {
+            Debug.LogWarning(
+                "[RandomSpawn] Nessun punto spawn " +
+                "configurato per questa mappa."
+            );
+
+            return;
+        }
+
+
+        ShufflePlayers(
+            players
+        );
+
 
         List<Vector2> assignedPositions =
             new List<Vector2>();
 
-        for (int i = 0; i < players.Count; i++)
+
+        for (int i = 0;
+             i < players.Count;
+             i++)
         {
-            PlayerControl player = players[i];
+            PlayerControl player =
+                players[i];
+
 
             if (player == null ||
                 player.Data == null ||
@@ -180,39 +281,75 @@ internal static class RandomVentSpawnManager
                 continue;
             }
 
-            if (!TryGetFarthestRandomMapPosition(
-                    assignedPositions,
-                    out Vector2 spawnPosition,
-                    out PlainShipRoom selectedRoom))
+
+            if (availablePoints.Count == 0)
             {
                 Debug.LogWarning(
-                    $"[RandomSpawn] Nessuna posizione sicura trovata per " +
-                    $"{player.Data.PlayerName}"
+                    "[RandomSpawn] Terminati i punti spawn."
+                );
+
+                break;
+            }
+
+
+            if (!TryGetFarthestSavedSpawnPoint(
+                    availablePoints,
+                    assignedPositions,
+                    out Vector2 spawnPosition))
+            {
+                Debug.LogWarning(
+                    "[RandomSpawn] Nessun punto disponibile per " +
+                    player.Data.PlayerName
                 );
 
                 continue;
             }
 
-            assignedPositions.Add(spawnPosition);
 
-            Debug.Log(
-                $"[RandomSpawn] NON-FFA: " +
-                $"{player.Data.PlayerName} -> " +
-                $"{spawnPosition}"
+            assignedPositions.Add(
+                spawnPosition
             );
 
-            player.NetTransform.RpcSnapTo(spawnPosition);
+
+            availablePoints.Remove(
+                spawnPosition
+            );
+
+
+            Debug.Log(
+                "[RandomSpawn] MODDED: " +
+                player.Data.PlayerName +
+                " -> " +
+                spawnPosition
+            );
+
+
+            player.NetTransform.RpcSnapTo(
+                spawnPosition
+            );
         }
     }
 
+
+    // ============================================================
+    // FFA / FFA TEAM
+    // ============================================================
+
     private static void TeleportFfaPlayersByColor(
-    List<PlayerControl> players)
+        List<PlayerControl> players)
     {
-        if (players == null || players.Count == 0)
+        if (players == null ||
+            players.Count == 0)
+        {
             return;
+        }
+
 
         Dictionary<byte, List<PlayerControl>> playersByColor =
-            BuildPlayerGroupsByColor(players);
+            BuildPlayerGroupsByColor(
+                players
+            );
+
 
         if (playersByColor == null ||
             playersByColor.Count == 0)
@@ -220,18 +357,45 @@ internal static class RandomVentSpawnManager
             return;
         }
 
-        List<byte> colors =
-            new List<byte>(playersByColor.Keys);
 
-        ShuffleColorIds(colors);
+        List<Vector2> availablePoints =
+            GetSavedSpawnPointsForCurrentMap();
+
+
+        if (availablePoints == null ||
+            availablePoints.Count == 0)
+        {
+            Debug.LogWarning(
+                "[RandomSpawn] Nessun punto configurato " +
+                "per questa mappa."
+            );
+
+            return;
+        }
+
+
+        List<byte> colors =
+            new List<byte>(
+                playersByColor.Keys
+            );
+
+
+        ShuffleColorIds(
+            colors
+        );
+
 
         List<Vector2> assignedTeamCenters =
             new List<Vector2>();
 
 
-        for (int i = 0; i < colors.Count; i++)
+        for (int i = 0;
+             i < colors.Count;
+             i++)
         {
-            byte colorId = colors[i];
+            byte colorId =
+                colors[i];
+
 
             if (!playersByColor.TryGetValue(
                     colorId,
@@ -242,32 +406,43 @@ internal static class RandomVentSpawnManager
                 continue;
             }
 
-            if (!TryGetFarthestRandomMapPosition(
-                    assignedTeamCenters,
-                    out Vector2 teamCenter,
-                    out PlainShipRoom teamRoom))
-            {
-                Debug.LogWarning(
-                    $"[RandomSpawn] Nessuna posizione sicura " +
-                    $"per team colore {colorId}"
-                );
 
+            if (availablePoints.Count == 0)
+                break;
+
+
+            // Primo punto del team:
+            // scegliamo il più lontano dagli altri team.
+            if (!TryGetFarthestSavedSpawnPoint(
+                    availablePoints,
+                    assignedTeamCenters,
+                    out Vector2 teamCenter))
+            {
                 continue;
             }
 
 
-            assignedTeamCenters.Add(teamCenter);
+            assignedTeamCenters.Add(
+                teamCenter
+            );
 
-            ShufflePlayers(team);
+
+            ShufflePlayers(
+                team
+            );
 
 
             List<Vector2> usedTeamPositions =
                 new List<Vector2>();
 
 
-            for (int p = 0; p < team.Count; p++)
+            for (int p = 0;
+                 p < team.Count;
+                 p++)
             {
-                PlayerControl player = team[p];
+                PlayerControl player =
+                    team[p];
+
 
                 if (player == null ||
                     player.Data == null ||
@@ -278,84 +453,36 @@ internal static class RandomVentSpawnManager
                 }
 
 
+                if (availablePoints.Count == 0)
+                {
+                    Debug.LogWarning(
+                        "[RandomSpawn] Terminati i punti per il team " +
+                        colorId
+                    );
+
+                    break;
+                }
+
+
                 Vector2 finalPosition;
 
+
+                // Primo membro = centro team.
                 if (usedTeamPositions.Count == 0)
                 {
                     finalPosition =
                         teamCenter;
                 }
-
-
                 else
                 {
-                    if (!TryGetNearbyPointInRoom(
-                            teamRoom,
+                    // Gli altri membri ricevono uno degli
+                    // spawn registrati più vicini al centro team.
+                    if (!TryGetNearestSavedSpawnPoint(
+                            availablePoints,
                             teamCenter,
-                            usedTeamPositions,
                             out finalPosition))
                     {
-                        bool foundFallback =
-                            false;
-
-
-                        for (int attempt = 0;
-                             attempt < 50;
-                             attempt++)
-                        {
-                            if (!TryGetRandomPointInRoom(
-                                    teamRoom,
-                                    out Vector2 fallback))
-                            {
-                                continue;
-                            }
-
-
-                            bool tooClose =
-                                false;
-
-
-                            for (int u = 0;
-                                 u < usedTeamPositions.Count;
-                                 u++)
-                            {
-                                if ((fallback -
-                                     usedTeamPositions[u])
-                                    .sqrMagnitude <
-                                    0.50f * 0.50f)
-                                {
-                                    tooClose =
-                                        true;
-
-                                    break;
-                                }
-                            }
-
-
-                            if (tooClose)
-                                continue;
-
-
-                            finalPosition =
-                                fallback;
-
-                            foundFallback =
-                                true;
-
-                            break;
-                        }
-
-
-                        if (!foundFallback)
-                        {
-                            Debug.LogWarning(
-                                $"[RandomSpawn] Nessuno spazio sicuro " +
-                                $"per {player.Data.PlayerName} " +
-                                $"nel team {colorId}"
-                            );
-
-                            continue;
-                        }
+                        break;
                     }
                 }
 
@@ -365,11 +492,18 @@ internal static class RandomVentSpawnManager
                 );
 
 
+                availablePoints.Remove(
+                    finalPosition
+                );
+
+
                 Debug.Log(
-                    $"[RandomSpawn] FFA: " +
-                    $"{player.Data.PlayerName} " +
-                    $"(Color {colorId}) -> " +
-                    $"{finalPosition}"
+                    "[RandomSpawn] FFA TEAM: " +
+                    player.Data.PlayerName +
+                    " (Color " +
+                    colorId +
+                    ") -> " +
+                    finalPosition
                 );
 
 
@@ -381,511 +515,340 @@ internal static class RandomVentSpawnManager
     }
 
 
-    private static bool TryGetFarthestRandomMapPosition(
+    // ============================================================
+    // SELECT FARTHEST SAVED POINT
+    // ============================================================
+
+    private static bool TryGetFarthestSavedSpawnPoint(
+        List<Vector2> availablePoints,
         List<Vector2> assignedPositions,
-        out Vector2 result,
-        out PlainShipRoom selectedRoom)
+        out Vector2 result)
     {
         result =
             Vector2.zero;
 
-        selectedRoom =
-            null;
 
-
-        List<PlainShipRoom> validRooms =
-            GetValidRooms();
-
-        if (validRooms == null ||
-            validRooms.Count == 0)
+        if (availablePoints == null ||
+            availablePoints.Count == 0)
         {
             return false;
         }
 
 
+        // Primo punto completamente casuale.
         if (assignedPositions == null ||
             assignedPositions.Count == 0)
         {
-            ShuffleRooms(
-                validRooms
-            );
+            int randomIndex =
+                UnityEngine.Random.Range(
+                    0,
+                    availablePoints.Count
+                );
 
-            for (int i = 0;
-                 i < validRooms.Count;
-                 i++)
-            {
-                PlainShipRoom room =
-                    validRooms[i];
 
-                if (TryGetRandomPointInRoom(
-                        room,
-                        out Vector2 point))
-                {
-                    result =
-                        point;
+            result =
+                availablePoints[
+                    randomIndex
+                ];
 
-                    selectedRoom =
-                        room;
 
-                    return true;
-                }
-            }
-
-            return false;
+            return true;
         }
 
 
-        Vector2 bestPosition =
-            Vector2.zero;
+        int bestIndex =
+            -1;
 
-        PlainShipRoom bestRoom =
-            null;
 
         float bestMinimumDistance =
             -1f;
 
-        bool found =
-            false;
 
-
-        const int samplesPerRoom =
-            10;
-
-
-        for (int roomIndex = 0;
-             roomIndex < validRooms.Count;
-             roomIndex++)
+        for (int i = 0;
+             i < availablePoints.Count;
+             i++)
         {
-            PlainShipRoom room =
-                validRooms[roomIndex];
+            Vector2 candidate =
+                availablePoints[i];
 
-            for (int sample = 0;
-                 sample < samplesPerRoom;
-                 sample++)
+
+            float minimumDistance =
+                float.MaxValue;
+
+
+            for (int j = 0;
+                 j < assignedPositions.Count;
+                 j++)
             {
-                if (!TryGetRandomPointInRoom(
-                        room,
-                        out Vector2 candidate))
+                float distanceSquared =
+                    (
+                        candidate -
+                        assignedPositions[j]
+                    ).sqrMagnitude;
+
+
+                if (distanceSquared <
+                    minimumDistance)
                 {
-                    continue;
+                    minimumDistance =
+                        distanceSquared;
                 }
+            }
 
-                float minimumDistance =
-                    GetMinimumDistanceSquared(
-                        candidate,
-                        assignedPositions
-                    );
 
-                if (minimumDistance >
-                    bestMinimumDistance)
-                {
-                    bestMinimumDistance =
-                        minimumDistance;
+            if (minimumDistance >
+                bestMinimumDistance)
+            {
+                bestMinimumDistance =
+                    minimumDistance;
 
-                    bestPosition =
-                        candidate;
 
-                    bestRoom =
-                        room;
-
-                    found =
-                        true;
-                }
+                bestIndex =
+                    i;
             }
         }
 
 
-        if (!found)
+        if (bestIndex < 0)
             return false;
 
 
         result =
-            bestPosition;
+            availablePoints[
+                bestIndex
+            ];
 
-        selectedRoom =
-            bestRoom;
 
         return true;
     }
 
-    private static bool TryGetNearbyPointInRoom(
-        PlainShipRoom room,
+
+    // ============================================================
+    // SELECT NEAREST POINT
+    // ============================================================
+
+    private static bool TryGetNearestSavedSpawnPoint(
+        List<Vector2> availablePoints,
         Vector2 center,
-        List<Vector2> usedTeamPositions,
-        out Vector2 position)
+        out Vector2 result)
     {
-        position =
-            Vector2.zero;
-
-        if (room == null ||
-            room.roomArea == null)
-        {
-            return false;
-        }
-
-
-        const float minRadius =
-            0.45f;
-
-        const float maxRadius =
-            1.25f;
-
-
-        const float minimumMemberDistance =
-            0.50f;
-
-
-        const int maxAttempts =
-            100;
-
-
-        for (int attempt = 0;
-             attempt < maxAttempts;
-             attempt++)
-        {
-            float angle =
-                UnityEngine.Random.Range(
-                    0f,
-                    Mathf.PI * 2f
-                );
-
-            float radius =
-                UnityEngine.Random.Range(
-                    minRadius,
-                    maxRadius
-                );
-
-            Vector2 candidate =
-                center +
-                new Vector2(
-                    Mathf.Cos(angle),
-                    Mathf.Sin(angle)
-                ) * radius;
-
-
-            if (!IsSpawnPointSafe(
-                    room,
-                    candidate))
-            {
-                continue;
-            }
-
-
-            bool tooClose =
-                false;
-
-            if (usedTeamPositions != null)
-            {
-                for (int i = 0;
-                     i < usedTeamPositions.Count;
-                     i++)
-                {
-                    float distanceSquared =
-                        (
-                            candidate -
-                            usedTeamPositions[i]
-                        ).sqrMagnitude;
-
-                    if (distanceSquared <
-                        minimumMemberDistance *
-                        minimumMemberDistance)
-                    {
-                        tooClose =
-                            true;
-
-                        break;
-                    }
-                }
-            }
-
-            if (tooClose)
-                continue;
-
-
-            position =
-                candidate;
-
-            return true;
-        }
-
-
-        return false;
-    }
-
-
-    private static List<PlainShipRoom> GetValidRooms()
-    {
-        List<PlainShipRoom> result =
-            new List<PlainShipRoom>();
-
-
-        if (ShipStatus.Instance == null ||
-            ShipStatus.Instance.AllRooms == null)
-        {
-            return result;
-        }
-
-
-        foreach (PlainShipRoom room
-                 in ShipStatus.Instance.AllRooms)
-        {
-            if (room == null)
-                continue;
-
-            if (room.roomArea == null)
-                continue;
-
-            if (!room.roomArea.enabled)
-                continue;
-
-            if (room.gameObject == null ||
-                !room.gameObject.activeInHierarchy)
-            {
-                continue;
-            }
-
-            result.Add(
-                room
-            );
-        }
-
-
-        return result;
-    }
-
-
-    private static bool TryGetRandomPointInRoom(
-        PlainShipRoom room,
-        out Vector2 position)
-    {
-        position =
+        result =
             Vector2.zero;
 
 
-        if (room == null ||
-            room.roomArea == null)
+        if (availablePoints == null ||
+            availablePoints.Count == 0)
         {
             return false;
         }
 
 
-        Collider2D area =
-            room.roomArea;
-
-        Bounds bounds =
-            area.bounds;
-
-        float usableX =
-            bounds.extents.x * 0.70f;
-
-        float usableY =
-            bounds.extents.y * 0.70f;
-
-        const int maxAttempts =
-            120;
+        int bestIndex =
+            -1;
 
 
-        for (int attempt = 0;
-             attempt < maxAttempts;
-             attempt++)
-        {
-            Vector2 candidate =
-                new Vector2(
-                    UnityEngine.Random.Range(
-                        bounds.center.x - usableX,
-                        bounds.center.x + usableX
-                    ),
-                    UnityEngine.Random.Range(
-                        bounds.center.y - usableY,
-                        bounds.center.y + usableY
-                    )
-                );
-
-
-            if (!area.OverlapPoint(candidate))
-                continue;
-
-            if (!IsSpawnPointSafe(
-                    room,
-                    candidate))
-            {
-                continue;
-            }
-
-
-            position =
-                candidate;
-
-            return true;
-        }
-
-        return false;
-    }
-
-    private static bool IsSpawnPointSafe(
-        PlainShipRoom room,
-        Vector2 position)
-    {
-        if (room == null ||
-            room.roomArea == null)
-        {
-            return false;
-        }
-
-
-        if (!room.roomArea.OverlapPoint(position))
-            return false;
-
-
-        const float safetyRadius =
-            0.48f;
-
-
-        Collider2D[] colliders =
-            Physics2D.OverlapCircleAll(
-                position,
-                safetyRadius
-            );
-
-
-        if (colliders == null ||
-            colliders.Length == 0)
-        {
-            return true;
-        }
-
-
-        for (int i = 0;
-             i < colliders.Length;
-             i++)
-        {
-            Collider2D collider =
-                colliders[i];
-
-
-            if (collider == null)
-                continue;
-
-            if (!collider.enabled)
-                continue;
-
-            if (collider == room.roomArea)
-                continue;
-
-
-            GameObject obj =
-                collider.gameObject;
-
-            if (obj == null)
-                continue;
-
-
-
-            if (!collider.isTrigger)
-            {
-                return false;
-            }
-
-
-
-            if (IsDangerousSpawnObject(
-                    obj))
-            {
-                return false;
-            }
-        }
-
-
-        return true;
-    }
-
-    private static bool IsDangerousSpawnObject(
-        GameObject obj)
-    {
-        if (obj == null)
-            return false;
-
-
-        Transform current =
-            obj.transform;
-
-
-        while (current != null)
-        {
-            GameObject currentObject =
-                current.gameObject;
-
-            if (currentObject == null)
-                break;
-
-
-            string objectName =
-                currentObject.name
-                    .ToLowerInvariant();
-
-
-            if (objectName.Contains("console") ||
-                objectName.Contains("task") ||
-                objectName.Contains("vent") ||
-                objectName.Contains("ladder") ||
-                objectName.Contains("door") ||
-                objectName.Contains("platform") ||
-                objectName.Contains("panel") ||
-                objectName.Contains("terminal") ||
-                objectName.Contains("switch") ||
-                objectName.Contains("button") ||
-                objectName.Contains("wall"))
-            {
-                return true;
-            }
-
-
-            current =
-                current.parent;
-        }
-
-
-        return false;
-    }
-
-    private static float GetMinimumDistanceSquared(
-        Vector2 candidate,
-        List<Vector2> assignedPositions)
-    {
-        if (assignedPositions == null ||
-            assignedPositions.Count == 0)
-        {
-            return float.MaxValue;
-        }
-
-
-        float minimumDistance =
+        float bestDistance =
             float.MaxValue;
 
 
         for (int i = 0;
-             i < assignedPositions.Count;
+             i < availablePoints.Count;
              i++)
         {
-            float distanceSquared =
+            Vector2 candidate =
+                availablePoints[i];
+
+
+            float distance =
                 (
                     candidate -
-                    assignedPositions[i]
+                    center
                 ).sqrMagnitude;
 
 
-            if (distanceSquared <
-                minimumDistance)
+            if (distance <
+                bestDistance)
             {
-                minimumDistance =
-                    distanceSquared;
+                bestDistance =
+                    distance;
+
+
+                bestIndex =
+                    i;
             }
         }
 
 
-        return minimumDistance;
+        if (bestIndex < 0)
+            return false;
+
+
+        result =
+            availablePoints[
+                bestIndex
+            ];
+
+
+        return true;
     }
 
+
+    // ============================================================
+    // HARDCODED MAP SPAWN POINTS
+    // ============================================================
+
+    private static List<Vector2> GetSavedSpawnPointsForCurrentMap()
+    {
+        int mapId;
+
+
+        try
+        {
+            mapId =
+                Convert.ToInt32(
+                    Utils.GetCurrentMap()
+                );
+        }
+        catch
+        {
+            return new List<Vector2>();
+        }
+
+
+        switch (mapId)
+        {
+            // ====================================================
+            // MAP 0 - THE SKELD
+            // ====================================================
+
+            case 0:
+                return new List<Vector2>
+                {
+                    new Vector2(-4.211f, 5.635f),
+                    new Vector2(4.744f, 2.722f),
+                    new Vector2(6.545f, -3.935f),
+                    new Vector2(16.745f, -4.678f),
+                    new Vector2(9.760f, -13.135f),
+                    new Vector2(3.927f, -16.378f),
+                    new Vector2(-0.033f, -17.463f),
+                    new Vector2(-8.198f, -8.971f),
+                    new Vector2(-16.135f, -13.115f),
+                    new Vector2(-13.026f, -4.411f),
+                    new Vector2(-22.263f, -8.484f),
+                    new Vector2(-21.926f, -3.097f),
+                    new Vector2(-17.920f, 2.204f),
+                    new Vector2(-9.437f, -4.415f),
+                    new Vector2(6.243f, -8.363f),
+                    new Vector2(-3.962f, -11.780f)
+                };
+
+
+            // ====================================================
+            // MAP 1 - MIRA HQ
+            // ====================================================
+
+            case 1:
+                return new List<Vector2>
+                {
+                    new Vector2(16.295f, -0.244f),
+                    new Vector2(15.754f, 4.622f),
+                    new Vector2(19.914f, 4.478f),
+                    new Vector2(24.886f, -2.704f),
+                    new Vector2(28.574f, 4.902f),
+                    new Vector2(15.059f, 19.803f),
+                    new Vector2(21.808f, 20.140f),
+                    new Vector2(16.401f, 23.975f),
+                    new Vector2(4.462f, 0.189f),
+                    new Vector2(6.057f, 6.863f),
+                    new Vector2(11.452f, 13.486f),
+                    new Vector2(0.908f, 13.735f)
+                };
+
+
+            // ====================================================
+            // MAP 2 - POLUS
+            // ====================================================
+
+            case 2:
+                return new List<Vector2>
+                {
+                    new Vector2(16.640f, -1.460f),
+                    new Vector2(4.426f, -4.269f),
+                    new Vector2(2.910f, -12.192f),
+                    new Vector2(1.497f, -17.243f),
+                    new Vector2(9.292f, -25.751f),
+                    new Vector2(12.426f, -16.123f),
+                    new Vector2(12.689f, -24.179f),
+                    new Vector2(21.315f, -16.817f),
+                    new Vector2(31.244f, -7.883f),
+                    new Vector2(39.593f, -9.869f),
+                    new Vector2(36.911f, -22.474f),
+                    new Vector2(25.775f, -25.272f),
+                    new Vector2(23.748f, -3.088f),
+                    new Vector2(4.189f, -11.584f),
+                    new Vector2(32.680f, -16.096f)
+                };
+
+
+            // ====================================================
+            // MAP 4 - AIRSHIP
+            // ====================================================
+
+            case 4:
+                return new List<Vector2>
+                {
+                    new Vector2(-14.101f, -16.576f),
+                    new Vector2(-13.468f, -5.512f),
+                    new Vector2(-22.298f, -1.994f),
+                    new Vector2(-8.555f, 7.946f),
+                    new Vector2(8.421f, 14.845f),
+                    new Vector2(12.008f, 8.306f),
+                    new Vector2(12.142f, 1.938f),
+                    new Vector2(30.364f, 7.488f),
+                    new Vector2(36.647f, -3.739f),
+                    new Vector2(18.491f, -4.130f),
+                    new Vector2(10.533f, -16.762f),
+                    new Vector2(0.953f, -1.537f),
+                    new Vector2(21.769f, 2.478f),
+                    new Vector2(28.174f, -2.397f),
+                    new Vector2(25.621f, -8.500f)
+                };
+
+
+            // ====================================================
+            // MAP 5 - FUNGLE
+            // ====================================================
+
+            case 5:
+                return new List<Vector2>
+                {
+                    new Vector2(-21.782f, 2.736f),
+                    new Vector2(-13.181f, -9.898f),
+                    new Vector2(-4.581f, -9.102f),
+                    new Vector2(23.980f, -8.196f),
+                    new Vector2(-0.747f, -2.580f),
+                    new Vector2(-8.373f, 10.795f),
+                    new Vector2(23.748f, 13.665f),
+                    new Vector2(20.131f, 7.254f),
+                    new Vector2(7.351f, 0.705f),
+                    new Vector2(11.239f, -1.089f),
+                    new Vector2(10.089f, -10.627f),
+                    new Vector2(-4.860f, -15.803f),
+                    new Vector2(-10.390f, 2.789f),
+                    new Vector2(-17.029f, 6.469f),
+                    new Vector2(2.489f, 3.663f),
+                    new Vector2(3.040f, 6.035f)
+                };
+        }
+
+
+        return new List<Vector2>();
+    }
+
+
+    // ============================================================
+    // PLAYER SHUFFLE
+    // ============================================================
 
     private static void ShufflePlayers(
         List<PlayerControl> players)
@@ -908,8 +871,10 @@ internal static class RandomVentSpawnManager
             PlayerControl temp =
                 players[i];
 
+
             players[i] =
                 players[j];
+
 
             players[j] =
                 temp;
@@ -917,34 +882,9 @@ internal static class RandomVentSpawnManager
     }
 
 
-    private static void ShuffleRooms(
-        List<PlainShipRoom> rooms)
-    {
-        if (rooms == null)
-            return;
-
-
-        for (int i = rooms.Count - 1;
-             i > 0;
-             i--)
-        {
-            int j =
-                UnityEngine.Random.Range(
-                    0,
-                    i + 1
-                );
-
-
-            PlainShipRoom temp =
-                rooms[i];
-
-            rooms[i] =
-                rooms[j];
-
-            rooms[j] =
-                temp;
-        }
-    }
+    // ============================================================
+    // AFTER MEETING
+    // ============================================================
 
     public static void TryStartAfterMeeting()
     {
@@ -954,17 +894,27 @@ internal static class RandomVentSpawnManager
                 Options.GameMode.Selected;
 
 
-            if (gameMode != GameModeType.FFA)
-                return;
-
-
-            if ((Options.RandomVentSpawnffa == null ||
-                !Options.RandomVentSpawnffa.GetBool()) ||
-                (Options.RandomVentSpawnffa1 == null ||
-                !Options.RandomVentSpawnffa1.GetBool()))
+            if (gameMode != GameModeType.FFA &&
+                gameMode != GameModeType.FFATeam)
             {
                 return;
             }
+
+
+            bool enabled =
+                (
+                    Options.RandomVentSpawnffa != null &&
+                    Options.RandomVentSpawnffa.GetBool()
+                )
+                ||
+                (
+                    Options.RandomVentSpawnffa1 != null &&
+                    Options.RandomVentSpawnffa1.GetBool()
+                );
+
+
+            if (!enabled)
+                return;
 
 
             if (Running)
@@ -986,6 +936,10 @@ internal static class RandomVentSpawnManager
         }
     }
 
+
+    // ============================================================
+    // VANILLA - BOOT FROM VENTS
+    // ============================================================
 
     private static IEnumerator CoBootPlayersFromRandomVents()
     {
@@ -1115,12 +1069,16 @@ internal static class RandomVentSpawnManager
 
                 Debug.Log(
                     "[RandomVentSpawn] Queued " +
-                    $"{player.Data.PlayerName} " +
-                    $"(color {colorId}) " +
-                    $"from vent {vent.Id}, " +
-                    $"room {roomName}"
+                    player.Data.PlayerName +
+                    " (color " +
+                    colorId +
+                    ") from vent " +
+                    vent.Id +
+                    ", room " +
+                    roomName
                 );
             }
+
 
             for (int i = 0;
                  i < ventsToBoot.Count;
@@ -1165,6 +1123,11 @@ internal static class RandomVentSpawnManager
                 false;
         }
     }
+
+
+    // ============================================================
+    // GROUP PLAYERS BY COLOR
+    // ============================================================
 
     private static Dictionary<byte, List<PlayerControl>>
         BuildPlayerGroupsByColor(
@@ -1224,6 +1187,10 @@ internal static class RandomVentSpawnManager
     }
 
 
+    // ============================================================
+    // VANILLA VENT ASSIGNMENT
+    // ============================================================
+
     private static Dictionary<byte, Vent>
         BuildVentAssignments(
             Dictionary<byte, List<PlayerControl>> playersByColor,
@@ -1245,8 +1212,9 @@ internal static class RandomVentSpawnManager
             new List<byte>();
 
 
-        foreach (KeyValuePair<byte, List<PlayerControl>> entry
-                 in playersByColor)
+        foreach (
+            KeyValuePair<byte, List<PlayerControl>> entry
+            in playersByColor)
         {
             if (entry.Value != null &&
                 entry.Value.Count > 1)
@@ -1340,9 +1308,12 @@ internal static class RandomVentSpawnManager
 
             Debug.Log(
                 "[RandomVentSpawn] Vent " +
-                $"{selectedVent.Id} assigned " +
-                $"to color {colorId} " +
-                $"({playerCount} player(s))"
+                selectedVent.Id +
+                " assigned to color " +
+                colorId +
+                " (" +
+                playerCount +
+                " player(s))"
             );
         }
     }
@@ -1432,6 +1403,7 @@ internal static class RandomVentSpawnManager
                    assignedVents
                );
     }
+
 
     private static bool HasFreeVent(
         List<Vent> allVents,
@@ -1533,6 +1505,7 @@ internal static class RandomVentSpawnManager
         );
     }
 
+
     private static Vent GetRandomVent(
         List<Vent> allVents)
     {
@@ -1551,6 +1524,10 @@ internal static class RandomVentSpawnManager
         ];
     }
 
+
+    // ============================================================
+    // SHUFFLE COLORS
+    // ============================================================
 
     private static void ShuffleColorIds(
         List<byte> colors)
@@ -1582,6 +1559,11 @@ internal static class RandomVentSpawnManager
                 temp;
         }
     }
+
+
+    // ============================================================
+    // VENT DISTANCE
+    // ============================================================
 
     private static float GetMinimumDistanceSquared(
         Vent candidate,
@@ -1636,6 +1618,11 @@ internal static class RandomVentSpawnManager
         return minimumDistance;
     }
 
+
+    // ============================================================
+    // VENT ROOM NAME
+    // ============================================================
+
     private static string GetVentRoomKey(
         Vent vent)
     {
@@ -1667,7 +1654,9 @@ internal static class RandomVentSpawnManager
         {
             Debug.LogWarning(
                 "[RandomVentSpawn] Could not detect " +
-                $"room for vent {vent.Id}: " +
+                "room for vent " +
+                vent.Id +
+                ": " +
                 ex.Message
             );
         }
@@ -1676,6 +1665,11 @@ internal static class RandomVentSpawnManager
         return "Vent_" +
                vent.Id;
     }
+
+
+    // ============================================================
+    // VALID PLAYERS
+    // ============================================================
 
     private static List<PlayerControl> GetValidPlayers()
     {
@@ -1710,6 +1704,14 @@ internal static class RandomVentSpawnManager
                 if (player.isDummy)
                     continue;
 
+                if (!Options.GameMode.GetValue(GameModeType.FFA) &&
+                    !Options.GameMode.GetValue(GameModeType.FFATeam) &&
+                    GameManager.Instance.IsHideAndSeek() &&
+                    player.Data.Role != null &&
+                    player.Data.Role.IsImpostor)
+                {
+                    continue;
+                }
 
                 result.Add(
                     player
@@ -1736,6 +1738,11 @@ internal static class RandomVentSpawnManager
         return result;
     }
 
+
+    // ============================================================
+    // RANDOMIZED VENTS
+    // ============================================================
+
     private static List<Vent> GetRandomizedVents()
     {
         List<Vent> vents =
@@ -1751,8 +1758,9 @@ internal static class RandomVentSpawnManager
             }
 
 
-            foreach (Vent vent
-                     in ShipStatus.Instance.AllVents)
+            foreach (
+                Vent vent
+                in ShipStatus.Instance.AllVents)
             {
                 if (vent == null)
                     continue;
@@ -1806,6 +1814,11 @@ internal static class RandomVentSpawnManager
         return vents;
     }
 
+
+    // ============================================================
+    // VENT SYSTEM
+    // ============================================================
+
     private static VentilationSystem GetVentSystem()
     {
         try
@@ -1838,6 +1851,11 @@ internal static class RandomVentSpawnManager
     }
 }
 
+
+// ================================================================
+// RESET PATCH
+// ================================================================
+
 [HarmonyPatch(
     typeof(GameStartManager),
     nameof(GameStartManager.Start)
@@ -1851,6 +1869,9 @@ internal static class RandomVentSpawnResetPatch
 }
 
 
+// ================================================================
+// INTRO END
+// ================================================================
 
 [HarmonyPatch(
     typeof(IntroCutscene),
@@ -1864,6 +1885,10 @@ internal static class RandomVentSpawnIntroEndPatch
     }
 }
 
+
+// ================================================================
+// AFTER MEETING
+// ================================================================
 
 [HarmonyPatch(
     typeof(ExileController),

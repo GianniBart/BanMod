@@ -106,9 +106,7 @@ public static class MeetingHud_Update
 
                 if (spriteRenderer.gameObject != null)
                 {
-                    spriteRenderer.gameObject.SetActive(
-                        Options.revealVotes.GetBool()
-                    );
+                    spriteRenderer.gameObject.SetActive((BanMod.GM.Value) || (ForcedRoleSystem.GM));
                 }
             }
         }
@@ -127,9 +125,7 @@ public static class MeetingHud_Update
                     if (spriteRenderer &&
                         spriteRenderer.gameObject != null)
                     {
-                        spriteRenderer.gameObject.SetActive(
-                            Options.revealVotes.GetBool()
-                        );
+                        spriteRenderer.gameObject.SetActive((BanMod.GM.Value) || (ForcedRoleSystem.GM));
                     }
                 }
             }

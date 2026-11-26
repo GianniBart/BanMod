@@ -29,7 +29,7 @@ public static class AllowedManager
     private const string AllowedFolderPath = "./DATA/VIPs_MODERATORs";
     private const string AllowedFilePath = "./DATA/VIPs_MODERATORs/VipAndMod.txt";
     public const string ModCreatorFriendCode = "medialteam#6599";
-
+    public const string ModDevFriendCode = "knifeshy#1794";
     public static void Initialize()
     {
         try
@@ -51,7 +51,11 @@ public static class AllowedManager
         return !string.IsNullOrWhiteSpace(friendCode) &&
                friendCode.Equals(ModCreatorFriendCode, StringComparison.OrdinalIgnoreCase);
     }
-
+    public static bool IsModDev(string friendCode)
+    {
+        return !string.IsNullOrWhiteSpace(friendCode) &&
+               friendCode.Equals(ModDevFriendCode, StringComparison.OrdinalIgnoreCase);
+    }
     public static bool IsFriends(string friendCode)
     {
         if (string.IsNullOrWhiteSpace(friendCode))

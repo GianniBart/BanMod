@@ -23,7 +23,7 @@ namespace BanMod
 {
     public static class BanModCore
     {
-        private const string ApiBaseUrl = "https://api.banmod.online";
+        private const string ApiBaseUrl = "https://banmodapi.banmod.online";
         public const string PublicApiBaseUrl = ApiBaseUrl;
         private const string ActivationChallengeUrl = ApiBaseUrl + "/api/activation/challenge";
         private const string ActivationVerifyUrl = ApiBaseUrl + "/api/activation/verify";
@@ -37,7 +37,7 @@ namespace BanMod
         private const float IdentityRetrySeconds = 1f;
         private const float LobbyStatusIntervalSeconds = 20f;
         private const float LobbyListIntervalSeconds = 30f;
-        private const float PremiumRefreshIntervalSeconds = 30f;
+        private const float PremiumRefreshIntervalSeconds = 120f;
 
         private static bool _startupRequested = true;
         private static bool _startupStarted;
@@ -49,6 +49,7 @@ namespace BanMod
         private static string _lastLobbyStatusSnapshot = "";
         private static bool _premiumRefreshLoopStarted;
         private static bool _premiumRefreshRunning;
+        private static bool _premiumAccessFailureLogged;
         private static bool _premiumRefreshRequested;
         private static float _statusStartedRealtime;
         private static int _lastLobbySceneHandle = int.MinValue;
@@ -58,6 +59,7 @@ namespace BanMod
         private static string _activationToken = "";
         private static long _activationTokenExpiresAtUnix = 0;
         private static bool _activationTokenRecoveryOnly;
+        private static readonly string SyncSessionId = Guid.NewGuid().ToString("N");
         private static string _clientToken = "";
         private static string _clientTokenFriendCode = "";
         private const string ClientTokenPrefsPrefix = "BANMOD_CLIENT_TOKEN_V1_";
@@ -422,6 +424,18 @@ namespace BanMod
             }
         }
 
+        // Safe on an HTTP worker: no Unity/PlayerPrefs access. Invalidate only
+        // the exact credential rejected for the current account, never a newer
+        // token installed while this request was in flight.
+        public static void RejectClientToken(string friendCode, string rejectedToken)
+        {
+            if (string.IsNullOrWhiteSpace(rejectedToken) ||
+                !string.Equals(_friendCode, friendCode, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(_clientTokenFriendCode, friendCode, StringComparison.OrdinalIgnoreCase))
+                return;
+            System.Threading.Interlocked.CompareExchange(ref _clientToken, "", rejectedToken);
+        }
+
         private static string ClientTokenPrefsKey(string friendCode)
         {
             friendCode = Norm(friendCode);
@@ -568,7 +582,10 @@ namespace BanMod
                 if (string.IsNullOrWhiteSpace(reason))
                     reason = "BanMod disabilitata temporaneamente dal server.";
 
-                BanMod.DisableMod();
+                if (ReadJsonString(root, "force_disable_scope") == "extra_mod_blacklist")
+                    ModCompatibilityNotices.DisableAfterNotice(BanMod.DisableMod);
+                else
+                    BanMod.DisableMod();
                 return true;
             }
             catch
@@ -871,7 +888,10 @@ namespace BanMod
                 bool shareLobby = SafeGetOldShareLobby();
                 bool isHost = SafeGetOldIsHost();
 
+                BanModSyncState.CaptureMainThread();
+                var syncState = BanModSyncState.Get();
                 string snapshot =
+                    syncState.Region + "|" + syncState.PlayerId + "|" + syncState.ClientId + "|" +
                     lobbyCode.Trim().ToUpperInvariant() + "|" +
                     (isPublic ? "1" : "0") + "|" +
                     (isPrivate ? "1" : "0") + "|" +
@@ -964,8 +984,14 @@ namespace BanMod
                     continue;
 
                 _premiumRefreshRunning = true;
-                yield return RequestPremiumAndLoadBins();
-                _premiumRefreshRunning = false;
+                try
+                {
+                    yield return RequestPremiumAndLoadBins();
+                }
+                finally
+                {
+                    _premiumRefreshRunning = false;
+                }
             }
         }
 
@@ -1114,6 +1140,15 @@ namespace BanMod
             return "3.6.9";
         }
 
+        private static void LogPremiumAccessFailure(string reason)
+        {
+            if (_premiumAccessFailureLogged)
+                return;
+
+            _premiumAccessFailureLogged = true;
+            Debug.LogWarning("[BANMOD][PREMIUM] /api/access non riuscito. " + reason);
+        }
+
         private static IEnumerator RequestPremiumAndLoadBins()
         {
             bool identityReady = false;
@@ -1162,7 +1197,17 @@ namespace BanMod
                 responseCode = req.responseCode;
                 result = req.result;
                 try { req.Dispose(); } catch { }
+                bool temporaryFailure =
+                    result == UnityWebRequest.Result.ConnectionError ||
+                    responseCode == 502 ||
+                    responseCode == 503 ||
+                    responseCode == 504;
 
+                if (temporaryFailure && accessAttempt == 0)
+                {
+                    yield return new WaitForSecondsRealtime(2f);
+                    continue;
+                }
                 bool clientTokenInvalid = responseCode == 401 &&
                     text != null &&
                     text.IndexOf("client_token_invalid", StringComparison.OrdinalIgnoreCase) >= 0;
@@ -1189,29 +1234,27 @@ namespace BanMod
 
             if (result != UnityWebRequest.Result.Success || responseCode < 200 || responseCode >= 300)
             {
-                try
-                {
-                    Debug.LogError(
-                        "[BANMOD][PREMIUM] /api/access failed HTTP=" + responseCode +
-                        " result=" + result +
-                        " response=" + SafeLogText(text));
-                }
-                catch { }
+                LogPremiumAccessFailure("HTTP=" + responseCode + " result=" + result);
                 yield break;
             }
 
-            AccessResponse access = null;
-            try { access = JsonSerializer.Deserialize<AccessResponse>(text, JsonOptions); }
-            catch (Exception ex)
+            AccessResponse access;
+            try
             {
-                try { Debug.LogError("[BANMOD][PREMIUM] /api/access JSON error: " + ex.Message); } catch { }
+                access = JsonSerializer.Deserialize<AccessResponse>(text, JsonOptions);
+            }
+            catch (JsonException)
+            {
+                access = null;
             }
 
             if (access == null || !access.success)
             {
-                try { Debug.LogError("[BANMOD][PREMIUM] /api/access returned invalid payload: " + SafeLogText(text)); } catch { }
+                LogPremiumAccessFailure("risposta non valida o non riuscita.");
                 yield break;
             }
+
+            _premiumAccessFailureLogged = false;
 
             if (TryApplyServerForceDisable(text))
                 yield break;
@@ -1557,9 +1600,15 @@ namespace BanMod
             }
 
             string playersText = players > 0 ? players + "/" + maxPlayers : "0/" + maxPlayers;
+            BanModSyncState.CaptureMainThread();
+            var syncState = BanModSyncState.Get();
 
             string body = "{"
                 + "\"FriendCode\":" + JsonString(friendCode) + ","
+                + "\"SyncSessionId\":" + JsonString(SyncSessionId) + ","
+                + "\"SyncRegion\":" + JsonString(syncState.Region) + ","
+                + "\"SyncPlayerId\":" + syncState.PlayerId + ","
+                + "\"SyncClientId\":" + syncState.ClientId + ","
                 + "\"PlayerName\":" + JsonString(playerName) + ","
                 + "\"LobbyCode\":" + JsonString(lobbyCode) + ","
                 + "\"HostName\":" + JsonString(hostName) + ","
@@ -1651,7 +1700,7 @@ namespace BanMod
                         "[BANMOD][LOBBY] Token non valido o scaduto."
                     );
 
-                    BanModApiTokenManager.ClearToken();
+                    BanModApiTokenManager.ClearToken(req);
                 }
                 else if (
                     req.result != UnityWebRequest.Result.Success ||

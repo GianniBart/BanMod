@@ -3,6 +3,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using BepInEx.Unity.IL2CPP.Utils.Collections;
 using HarmonyLib;
@@ -177,8 +178,14 @@ namespace BanMod
             _pollMessagesRequested = false;
             _pollReportsRequested = false;
 
-            yield return PollServerMessages(pollMessages, pollReports);
-            _pollRunning = false;
+            try
+            {
+                yield return PollServerMessages(pollMessages, pollReports);
+            }
+            finally
+            {
+                _pollRunning = false;
+            }
         }
 
         private static IEnumerator PollServerMessages(bool pollMessages, bool pollReports)
@@ -212,13 +219,14 @@ namespace BanMod
 
             if (request.responseCode == 401)
             {
-                BanModApiTokenManager.ClearToken();
+                BanModApiTokenManager.ClearToken(request);
                 request.Dispose();
                 yield break;
             }
 
             if (request.result != UnityWebRequest.Result.Success)
             {
+                BMLogger.LogWarning("[COMM] Message poll failed HTTP " + request.responseCode + " result=" + request.result);
                 request.Dispose();
                 yield break;
             }
@@ -240,8 +248,8 @@ namespace BanMod
                 if (!ShouldShowMessage(msg))
                     continue;
 
-                ShowServerMessagePopup(msg);
-                yield break;
+                if (ShowServerMessagePopup(msg))
+                    yield break;
             }
 
             if (pollReports)
@@ -266,6 +274,10 @@ namespace BanMod
                 reports = new List<BanModCommunicationManager.ReportSummary>();
 
             UpdateUnreadReports(reports);
+
+            // A background report must not replace another popup and mark it read.
+            if (BanModCommunicationUi.IsUiOpen)
+                yield break;
 
             if (reports.Count <= 0)
                 yield break;
@@ -356,35 +368,29 @@ namespace BanMod
             request.Dispose();
         }
 
-        private static void ShowServerMessagePopup(ServerMessage msg)
+        private static bool ShowServerMessagePopup(ServerMessage msg)
         {
             string title = string.IsNullOrWhiteSpace(msg.Title) ? "Messaggio BANMOD" : msg.Title.Trim();
-            string body = string.IsNullOrWhiteSpace(msg.Message) ? "" : msg.Message.Trim();
+            string body = msg.Message ?? "";
             string key = GetMessageAckKey(msg);
-
-            if (!string.IsNullOrWhiteSpace(key))
-                _visibleMessageKeys.Add(key);
-
+            if (!string.IsNullOrWhiteSpace(key)) _visibleMessageKeys.Add(key);
             try
             {
-                BanModPopup.CreateMessagePopup(title, body, () => AcknowledgeMessage(msg));
-                return;
+                BanModCommunicationUi.EnsureCreated();
+                var ui = BanModCommunicationUi.Instance;
+                if (ui != null && ui.TryShowBackgroundMessagePopup(title, body, () => AcknowledgeMessage(msg)))
+                {
+                    BMLogger.LogInfo("[COMM] Message popup opened id=" + msg.Id);
+                    return true;
+                }
             }
-            catch
+            catch (Exception ex)
             {
-                if (!string.IsNullOrWhiteSpace(key))
-                    _visibleMessageKeys.Remove(key);
+                BMLogger.LogWarning("[COMM] Message popup failed id=" + msg.Id + " exception=" + ex.GetType().Name);
             }
-
-            try
-            {
-                string text = "[BANMOD] " + title;
-                if (!string.IsNullOrWhiteSpace(body))
-                    text += "\n" + body;
-
-                Debug.LogWarning(text);
-            }
-            catch { }
+            // Failed/deferred display is not an acknowledgement. Allow the next poll to retry.
+            if (!string.IsNullOrWhiteSpace(key)) _visibleMessageKeys.Remove(key);
+            return false;
         }
 
         private static BanModCommunicationManager.ReportChatMessage GetLatestAdminReportMessage(BanModCommunicationManager.ReportSummary report)
@@ -579,43 +585,46 @@ namespace BanMod
 
         private static List<ServerMessage> ParseMessages(string json)
         {
-            List<ServerMessage> result = new List<ServerMessage>();
-
-            if (string.IsNullOrWhiteSpace(json))
-                return result;
-
+            var result = new List<ServerMessage>();
+            if (string.IsNullOrWhiteSpace(json)) return result;
             try
             {
-                MatchCollection objects = Regex.Matches(json, "\\{[^\\{\\}]*\\\"id\\\"[^\\{\\}]*\\}");
-
-                foreach (Match match in objects)
+                using var document = JsonDocument.Parse(json);
+                if (document.RootElement.ValueKind != JsonValueKind.Object ||
+                    !document.RootElement.TryGetProperty("messages", out var items) ||
+                    items.ValueKind != JsonValueKind.Array) return result;
+                foreach (var item in items.EnumerateArray())
                 {
-                    string obj = match.Value;
-                    int id = ExtractJsonInt(obj, "id", 0);
-
-                    if (id <= 0)
-                        continue;
-
-                    ServerMessage msg = new ServerMessage
+                    if (item.ValueKind != JsonValueKind.Object) continue;
+                    int id = JsonInt(item, "id", 0);
+                    if (id <= 0) continue;
+                    var msg = new ServerMessage
                     {
                         Id = id,
-                        Title = BanModApiTokenManager.ExtractJsonString(obj, "title", ""),
-                        Message = BanModApiTokenManager.ExtractJsonString(obj, "message", ""),
-                        Severity = BanModApiTokenManager.ExtractJsonString(obj, "severity", "info"),
-                        Signature = BanModApiTokenManager.ExtractJsonString(obj, "signature", ""),
-                        ReminderHours = ExtractJsonInt(obj, "reminder_hours", ExtractJsonInt(obj, "reminderHours", 24))
+                        Title = JsonText(item, "title", ""),
+                        Message = JsonText(item, "message", ""),
+                        Severity = JsonText(item, "severity", "info"),
+                        Signature = JsonText(item, "signature", ""),
+                        ReminderHours = JsonInt(item, "reminder_hours", JsonInt(item, "reminderHours", 24))
                     };
-
-                    if (string.IsNullOrWhiteSpace(msg.Signature))
-                        msg.Signature = BuildLocalSignature(msg);
-
+                    if (string.IsNullOrWhiteSpace(msg.Signature)) msg.Signature = BuildLocalSignature(msg);
                     result.Add(msg);
                 }
             }
-            catch { }
-
+            catch (JsonException)
+            {
+                BMLogger.LogWarning("[COMM] Invalid JSON in message response.");
+            }
             return result;
         }
+
+        private static string JsonText(JsonElement item, string key, string fallback) =>
+            item.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.String
+                ? value.GetString() ?? fallback : fallback;
+
+        private static int JsonInt(JsonElement item, string key, int fallback) =>
+            item.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.Number &&
+            value.TryGetInt32(out int number) ? number : fallback;
 
         private static bool ExtractJsonBool(string json, string key, bool fallback)
         {

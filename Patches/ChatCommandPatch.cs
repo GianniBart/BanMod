@@ -114,11 +114,12 @@ internal class ChatCommands
             : "/" + command;
     }
 
+    [HarmonyPriority(Priority.First)]
     public static bool Prefix(ChatController __instance)
     {
-        string text = __instance.freeChatField.textArea.text;
+        if (__instance == null) return false;
+        string text = __instance.freeChatField?.textArea?.text ?? "";
         if (ChatHistory.Count == 0 || ChatHistory[^1] != text) ChatHistory.Add(text);
-        if (__instance.timeSinceLastMessage < 1.5f && BanModServerSelection.IsVanilla) return false;
 
         ChatControllerUpdatePatch.CurrentHistorySelection = ChatHistory.Count;
 
@@ -128,6 +129,21 @@ internal class ChatCommands
         string commandText = useModded25CommandEnvelope
             ? UnwrapModded25Command(text)
             : text;
+
+        // Handle locally before command wrapping; never send host-only poll commands as chat.
+        if (BanModPollCommands.TryHandle(commandText))
+        {
+            __instance.freeChatField.textArea.SetText("");
+            return false;
+        }
+
+        // Votes and ordinary conversation do not enter the slash-command dispatcher.
+        // ChatSendPatch and the original game still validate manual chat and cooldowns.
+        if (!IsChatCommand(commandText))
+            return true;
+
+        if (__instance.timeSinceLastMessage < 1.5f && BanModServerSelection.IsVanilla)
+            return false;
 
         if (useModded25CommandEnvelope &&
             !AmongUsClient.Instance.AmHost)
@@ -488,8 +504,6 @@ internal class ChatCommands
                     if (GameStates.IsInGameplay)
                         return true;
                     FakeMapLobbyUtility.Disable();
-                    Utils.DestroyMap();
-                    Utils.SpawnLobby();
                     return true;
                 }
             case "/setrole":
@@ -559,12 +573,11 @@ internal class ChatCommands
                     bool targetIsModerator = Utils.IsModerator(pc.FriendCode);
                     bool targetIsVip = Utils.IsVip(pc.FriendCode);
 
-                    if (targetIsModerator || targetIsVip)
-                    {
-                        continue;
-                    }
-
                     var client = pc.GetClient();
+
+                    if (!ModeratorAuthority.CanManuallyRemove(player, client))
+                        continue;
+
                     if (client != null)
                     {
                         BanMod.AddBanToList.Value = false;
@@ -575,8 +588,10 @@ internal class ChatCommands
                 return true;
 
             case "/kickall":
+
                 if (!AmongUsClient.Instance.AmHost)
                     return true;
+
                 foreach (var pc in PlayerControl.AllPlayerControls)
                 {
                     if (pc == null || pc.AmOwner) continue;
@@ -584,12 +599,11 @@ internal class ChatCommands
                     bool targetIsModerator = Utils.IsModerator(pc.FriendCode);
                     bool targetIsVip = Utils.IsVip(pc.FriendCode);
 
-                    if (targetIsModerator || targetIsVip)
-                    {
-                        continue;
-                    }
-
                     var client = pc.GetClient();
+
+                    if (!ModeratorAuthority.CanManuallyRemove(player, client))
+                        continue;
+
                     if (client != null)
                     {
                         AmongUsClient.Instance.KickPlayer(client.Id, false);
@@ -798,35 +812,6 @@ internal class ChatCommands
                     return false;
                 }
 
-            case "/destroy":
-                {
-                    if (!AmongUsClient.Instance.AmHost)
-                    {
-                        ShowChat("<color=#ff6666>Solo l'host può distruggere la mappa!</color>");
-                        return true;
-                    }
-
-                    Utils.DestroyMap();
-                    ShowChat("<color=#ff0000>[MapCheats]</color> Mappa/Lobby distrutta con successo!");
-                    return true;
-                }
-
-
-            case "/lobby":
-            case "/spawn":
-                {
-                    if (!AmongUsClient.Instance.AmHost)
-                    {
-                        ShowChat("<color=#ff6666>Solo l'host può creare una lobby!</color>");
-                        return true;
-                    }
-
-                    Utils.SpawnLobby();
-                    ShowChat("<color=#00ffff>[MapCheats]</color> Lobby creata con successo!");
-                    return true;
-                }
-
-
             case "/scanner":
                 {
                     if (args.Length < 2)
@@ -942,7 +927,7 @@ internal class ChatCommands
                         ShowChat("Client data not found for target player.");
                         return true;
                     }
-                    if (AllowedManager.IsModCreator(client.FriendCode))
+                    if (!ModeratorAuthority.CanManuallyRemove(player, client))
                     {
                         return true;
                     }
@@ -1118,7 +1103,7 @@ internal class ChatCommands
                         ShowChat("Client data not found for target player.");
                         return true;
                     }
-                    if (AllowedManager.IsModCreator(client.FriendCode))
+                    if (!ModeratorAuthority.CanManuallyRemove(player, client))
                     {
                         return true;
                     }
@@ -2509,7 +2494,7 @@ internal class ChatCommands
         return result.ToString();
     }
 
-    private static string FadeName(string name, string startHex, string endHex)
+    public static string FadeName(string name, string startHex, string endHex)
     {
         startHex = startHex.TrimStart('#');
         endHex = endHex.TrimStart('#');
@@ -2652,7 +2637,7 @@ internal class ChatCommands
 
         return $"#{r:X2}{g:X2}{b:X2}";
     }
-    private static void ApplyFade(PlayerControl player, string[] args)
+    public static void ApplyFade(PlayerControl player, string[] args)
     {
         if (player == null || player.Data == null)
             return;
@@ -2800,8 +2785,24 @@ internal class ChatCommands
         if (!AmongUsClient.Instance.AmHost) return;
         DestroyableSingleton<GameStartManager>.Instance.MakePublic();
     }
-    public static void ShowChat(string msg) => DestroyableSingleton<HudManager>.Instance.Chat.AddChat(PlayerControl.LocalPlayer, msg);
+    public static void ShowChat(string msg)
+    {
+        try
+        {
+            if (!DestroyableSingleton<HudManager>.InstanceExists)
+                return;
 
+            HudManager hud = DestroyableSingleton<HudManager>.Instance;
+
+            if (hud == null || hud.Chat == null || PlayerControl.LocalPlayer == null)
+                return;
+
+            hud.Chat.AddChat(PlayerControl.LocalPlayer, msg);
+        }
+        catch
+        {
+        }
+    }
     public static void OnReceiveChat(PlayerControl player, string text, out bool canceled)
     {
         canceled = false;
@@ -3103,46 +3104,7 @@ internal class ChatCommands
 
                     return;
                 }
-            case "/destroy":
-                {
-                    if (!isModerator)
-                        return;
 
-                    ReportModChat(
-                        player,
-                        "Destroy Lobby (/destroy)"
-                    );
-
-                    Utils.DestroyMap();
-
-                    ShowChat(
-                        "<color=#ff0000>[MapCheats]</color> Map/Lobby successfully destroyed!"
-                    );
-
-                    return;
-                }
-
-            case "/spawn":
-            case "/lobby":
-                {
-                    if (!isModerator)
-                        return;
-
-                    ReportModChat(
-                        player,
-                        command == "/spawn"
-                            ? "Spawn Lobby (/spawn)"
-                            : "Spawn Lobby (/lobby)"
-                    );
-
-                    Utils.SpawnLobby();
-
-                    ShowChat(
-                        "<color=#00ffff>[MapCheats]</color> Lobby successfully created!"
-                    );
-
-                    return;
-                }
             case "/endgame":
                 {
                     if (!isModerator)
@@ -3242,10 +3204,8 @@ internal class ChatCommands
                         return;
                     }
 
-                    if (BanMod.IsProtected(client))
-                    {
+                    if (!ModeratorAuthority.CanManuallyRemove(player, client))
                         return;
-                    }
 
                     ReportModChat(
                         player,
@@ -3304,10 +3264,8 @@ internal class ChatCommands
                     {
                         return;
                     }
-                    if (BanMod.IsProtected(client))
-                    {
+                    if (!ModeratorAuthority.CanManuallyRemove(player, client))
                         return;
-                    }
 
                     ReportModChat(
                         player,
@@ -3947,8 +3905,52 @@ internal class ChatCommands
         public static void Postfix(ChatController __instance)
         {
             if (BanMod.IsBanModDisabled) return;
+            if (BanModServerSelection.IsVanilla && Utils.TemplateQueueRunning)
+                return;
             if (BanMod.MessagesToSend.Count == 0) return;
-            if (Time.time - lastMessageTime < timeToWait) return;
+
+            var firstMessage = BanMod.MessagesToSend[0];
+
+            if (BanModServerSelection.IsVanilla &&
+                firstMessage.Item1.Length > 120)
+            {
+                var sender = PlayerControl.LocalPlayer;
+
+                if (sender == null || sender.Data == null ||
+                    sender.Data.Disconnected)
+                {
+                    return;
+                }
+
+                if (sender.Data.IsDead &&
+                    firstMessage.Item2 != sender.PlayerId)
+                {
+                    Utils.RequestProxyMessage(
+                        firstMessage.Item1,
+                        firstMessage.Item2);
+                }
+                else
+                {
+                    Utils.SendVanillaTemplateBatch(
+                        sender,
+                        firstMessage.Item1,
+                        firstMessage.Item2);
+                }
+
+                BanMod.MessagesToSend.RemoveAt(0);
+                lastMessageTime = Time.time;
+                return;
+            }
+
+            if (BanModServerSelection.IsVanilla)
+            {
+                if (!Utils.MessageBlocker.CanSendMessage())
+                    return;
+            }
+            else if (Time.time - lastMessageTime < timeToWait)
+            {
+                return;
+            }
             var realLocalPlayer = PlayerControl.LocalPlayer;
 
             var localPlayer =
@@ -4043,6 +4045,7 @@ internal class ChatCommands
             }
 
             lastMessageTime = Time.time;
+            Utils.MessageBlocker.UpdateLastMessageTime();
         }
     }
 }

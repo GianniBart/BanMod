@@ -10,7 +10,7 @@
 
 		<GenerateInteropAssemblies Condition="'$(DesignTimeBuild)' == 'true'">false</GenerateInteropAssemblies>
 
-		<VersionPrefix>3.9.8</VersionPrefix>
+		<VersionPrefix>4.5.3</VersionPrefix>
 		<Description>Ban automatico</Description>
 		<Authors>Gianni</Authors>
 		<AssemblyName>BanMod</AssemblyName>

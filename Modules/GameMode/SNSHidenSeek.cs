@@ -734,10 +734,9 @@ namespace BanMod
             }
             else
             {
-                player.RpcSetRole(
-                    RoleTypes.ImpostorGhost,
-                    true
-                );
+                player.Data.IsDead = true;
+                player.Data.MarkDirty();
+                player.RpcSetRole(RoleTypes.ImpostorGhost, true);
             }
         }
 

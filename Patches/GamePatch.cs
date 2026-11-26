@@ -56,7 +56,6 @@ public static class GameEndPatch
         BanMod.hasSentHackWarning = false;
         BanMod.hasKilled = false;
         RpcSetTasksPatch.ResetGeneratedCommonTasks();
-        SabotageSystemType_UpdateSystem_Patch.Clear();
     }
 }
 [HarmonyPatch(typeof(ShipStatus), nameof(ShipStatus.Start))]
@@ -68,7 +67,9 @@ public static class GameStartPatch
         if (!AmongUsClient.Instance.AmHost) return;
         if (FakeMapLobbyUtility.Active) return;
         FirstMeetingProtectionManager.ResetForNewGame();
+
         GameModeType gameMode = Options.GameMode.Selected;
+
         if (Options.Jester.GetBool())
         {
             Jester.SelectJester();
@@ -82,6 +83,8 @@ public static class GameStartPatch
         ImmortalManager.ResetImmortal();
         TaskManager.ResetTaskManager();
         MatchSummary1.Reset();
+        EndCriteriaPatch.ResetSnsEndDelay();
+        ImpostorTracker.ResetSnsSnapshot();
         TaskTracker.Clear();
         KillTracker.Clear();
         BanMod.EndGameForced = false;
@@ -290,7 +293,18 @@ public static class GameStartPatch
         {
             yield return null;
         }
+        while (!PlayerControl.LocalPlayer.roleAssigned ||
+       PlayerControl.LocalPlayer.Data.Role == null)
+        {
+            yield return null;
+        }
 
+        if (GameManager.Instance != null &&
+            GameManager.Instance.IsHideAndSeek() &&
+            Options.EnableSNS.GetBool())
+        {
+            ImpostorTracker.CaptureSnsSnapshot();
+        }
         if (Options.Jester.GetBool())
         {
             Jester.SendJesterMessage();
@@ -541,7 +555,17 @@ public static class EndGameSavePatch
         PreviousMatchPopupTracker
             .SaveCurrentMatch();
 
-        if (GameTimeLimit.EndedByTimer)
+        if (MatchSummary1.SnsHnsReason !=
+    MatchSummary1.SnsHnsEndReason.None)
+        {
+            bool impostorsWon =
+                MatchSummary1.SnsHnsReason ==
+                MatchSummary1.SnsHnsEndReason.ImpostorsWin;
+
+            MatchSummary1.ImpostorWin = impostorsWon;
+            MatchSummary1.CrewmateWin = !impostorsWon;
+        }
+        else if (GameTimeLimit.EndedByTimer)
         {
             switch (GameTimeLimit.WinnerByTimer)
             {
@@ -594,6 +618,26 @@ public static class EndGameSavePatch
 
         MatchSummary1.StopMatchTimer();
         MatchSummary1.SaveToHistory();
+        if (GameManager.Instance != null && GameManager.Instance.IsHideAndSeek())
+        {
+            var hnsOptions = GameOptionsManager.Instance?
+                .CurrentGameOptions?
+                .Cast<HideNSeekGameOptionsV12>();
+
+            if (hnsOptions != null)
+                hnsOptions.ImpostorPlayerID = -1;
+
+            if (Options.SeekerSelections != null)
+            {
+                foreach (var option in Options.SeekerSelections)
+                {
+                    if (option != null)
+                        option.SetValue(0);
+                }
+            }
+
+            OptionItem.SyncAllOptions();
+        }
 
         UnifiedRPCHandlerPatch
             .AlreadyHandledCheaters
@@ -654,6 +698,12 @@ public static class VictoryLogicPatch
 [HarmonyPatch(typeof(LogicGameFlowHnS), nameof(LogicGameFlowHnS.CheckEndCriteria))]
 public static class EndCriteriaPatch
 {
+    private static float snsEndPendingSince = -1f;
+
+    public static void ResetSnsEndDelay()
+    {
+        snsEndPendingSince = -1f;
+    }
     public static bool Prefix(LogicGameFlowHnS __instance)
     {
         if (BanMod.NoGameEnd.Value)
@@ -672,8 +722,11 @@ public static class EndCriteriaPatch
 
         int totalSeekersNeeded = Options.NumSeekers.GetInt();
 
-        if (totalSeekersNeeded == 1)
+        if (totalSeekersNeeded == 1 &&
+            !Options.EnableSNS.GetBool())
+        {
             return true;
+        }
 
         bool showAd = false;
 
@@ -690,22 +743,106 @@ public static class EndCriteriaPatch
 
         int seekersAlive = 0;
         int crewmatesAlive = 0;
+        int seekersConnected = 0;
 
         foreach (var player in GameData.Instance.AllPlayers)
         {
-            if (player == null || player.Disconnected)
+            if (player == null ||
+                player.Disconnected ||
+                player.Role == null)
+            {
                 continue;
+            }
 
             if (player.Role.IsImpostor)
             {
+                seekersConnected++;
+
                 if (!player.IsDead)
                     seekersAlive++;
             }
+            else if (!player.IsDead)
+            {
+                crewmatesAlive++;
+            }
+        }
+
+        if (Options.EnableSNS.GetBool())
+        {
+            // La richiesta di fine partita è già stata inviata.
+            if (MatchSummary1.SnsHnsReason !=
+                MatchSummary1.SnsHnsEndReason.None)
+            {
+                return false;
+            }
+            if (seekersAlive <= 0 || crewmatesAlive <= 0)
+            {
+                if (snsEndPendingSince < 0f)
+                    snsEndPendingSince = Time.realtimeSinceStartup;
+
+                if (Time.realtimeSinceStartup - snsEndPendingSince < 0.5f)
+                    return false;
+            }
             else
             {
-                if (!player.IsDead)
-                    crewmatesAlive++;
+                snsEndPendingSince = -1f;
             }
+            if (seekersAlive <= 0)
+            {
+                MatchSummary1.SnsHnsReason = seekersConnected > 0
+                    ? MatchSummary1.SnsHnsEndReason.ImpostorsDead
+                    : MatchSummary1.SnsHnsEndReason.ImpostorsDisconnected;
+
+                __instance.Manager.RpcEndGame(
+                    seekersConnected > 0
+                        ? GameOverReason.HideAndSeek_CrewmatesByTimer
+                        : GameOverReason.ImpostorDisconnect,
+                    false);
+
+                return false;
+            }
+
+            if (crewmatesAlive <= 0)
+            {
+                MatchSummary1.SnsHnsReason =
+                    MatchSummary1.SnsHnsEndReason.ImpostorsWin;
+
+                __instance.Manager.RpcEndGame(
+                    GameOverReason.HideAndSeek_ImpostorsByKills,
+                    false);
+
+                return false;
+            }
+
+            GameData.Instance.RecomputeTaskCounts();
+
+            if (GameData.Instance.TotalTasks > 0 &&
+                GameData.Instance.CompletedTasks >=
+                GameData.Instance.TotalTasks)
+            {
+                MatchSummary1.SnsHnsReason =
+                    MatchSummary1.SnsHnsEndReason.TasksCompleted;
+
+                __instance.Manager.RpcEndGame(
+                    GameOverReason.HideAndSeek_CrewmatesByTimer,
+                    false);
+
+                return false;
+            }
+
+            if (__instance.AllTimersExpired())
+            {
+                MatchSummary1.SnsHnsReason =
+                    MatchSummary1.SnsHnsEndReason.TimerExpired;
+
+                __instance.Manager.RpcEndGame(
+                    GameOverReason.HideAndSeek_CrewmatesByTimer,
+                    false);
+
+                return false;
+            }
+
+            return false;
         }
 
         if (crewmatesAlive <= 0)
@@ -716,7 +853,11 @@ public static class EndCriteriaPatch
 
         if (seekersAlive <= 0)
         {
-            __instance.Manager.RpcEndGame(GameOverReason.ImpostorDisconnect, false);
+            GameOverReason reason = seekersConnected > 0
+                ? GameOverReason.HideAndSeek_CrewmatesByTimer
+                : GameOverReason.ImpostorDisconnect;
+
+            __instance.Manager.RpcEndGame(reason, false);
             return false;
         }
 

@@ -76,6 +76,7 @@ namespace BanMod
             OptionCategory.Meetings,
 
             OptionCategory.Levels,
+            OptionCategory.AntiBot,
             OptionCategory.Blocklist,
             OptionCategory.Cheat,
             OptionCategory.Afk,

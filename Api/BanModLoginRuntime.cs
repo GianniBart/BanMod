@@ -184,6 +184,16 @@ namespace BanMod
             ApplyServerDisable(reason);
         }
 
+        public bool ShowModCompatibilityNotice(bool cheatDetected)
+        {
+            return ModCompatibilityNotices.Show(cheatDetected);
+        }
+
+        public bool ForceDisableModAfterCheatNotice(string reason)
+        {
+            return ModCompatibilityNotices.DisableAfterNotice(() => ApplyServerDisable(reason));
+        }
+
         public void ForceDisableMod(string reason)
         {
             ApplyServerDisable(reason);

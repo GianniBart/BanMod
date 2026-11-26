@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using static QRCoder.QRCodeGenerator;
 
 namespace BanMod
 {
@@ -49,7 +50,8 @@ namespace BanMod
                     => MainTab.Game,
 
 
-                OptionCategory.Levels
+                OptionCategory.AntiBot
+                    or OptionCategory.Levels
                     or OptionCategory.Blocklist
                     or OptionCategory.Cheat
                     or OptionCategory.Afk
@@ -126,6 +128,7 @@ namespace BanMod
                 OptionCategory.Follow => "TabGroup.Follow",
                 OptionCategory.Spamlist => "TabGroup.Spam",
                 OptionCategory.Wordlist => "TabGroup.Word",
+                OptionCategory.AntiBot => "TabGroup.AntiBot",
 
                 // ROLES
                 OptionCategory.Impostor => "TabGroup.Impostor",
@@ -907,6 +910,7 @@ namespace BanMod
 
         // MODERATION
         Levels,
+        AntiBot,
         Blocklist,
         Cheat,
         Afk,

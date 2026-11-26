@@ -147,136 +147,19 @@ namespace BanMod
                     if (CloseMeetingManager.closeMeetingConfirmUI != null || GuessManager.guesserUI != null)
                         return;
 
-                    MeetingVoteCloser.CloseVoteNow();
+                    Utils.SondaggioChiusuraMeeting(__instance, true);
                 };
 
                 button.OnClick.AddListener((UnityEngine.Events.UnityAction)value);
             }
         }
 
+        // Kept as the public entry point for callers: confirmation is now a lobby poll.
         public static void ShowCloseMeetingConfirmation(MeetingHud __instance)
         {
-            if (__instance == null)
+            if (__instance == null || AmongUsClient.Instance == null || !AmongUsClient.Instance.AmHost)
                 return;
-
-            __instance.playerStates.ToList().ForEach(x => x.gameObject.SetActive(false));
-            __instance.SkipVoteButton.gameObject.SetActive(false);
-
-            var closeMeetingButton = __instance.transform.Find(CloseMeetingButtonName);
-            if (closeMeetingButton != null)
-                closeMeetingButton.gameObject.SetActive(false);
-
-            var smallRightButton = __instance.transform.Find(SmallRightButtonName);
-            if (smallRightButton != null)
-                smallRightButton.gameObject.SetActive(false);
-
-            GameObject canvasGO = new GameObject("CloseMeetingConfirmCanvas");
-            Canvas canvas = canvasGO.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvasGO.AddComponent<CanvasScaler>();
-            canvasGO.AddComponent<GraphicRaycaster>();
-
-            closeMeetingConfirmUI = canvasGO;
-
-            GameObject container = new GameObject("CloseMeetingConfirmContainer");
-            container.transform.SetParent(canvasGO.transform, false);
-
-            GameObject confirmTextObj = new GameObject("ConfirmCloseText");
-            confirmTextObj.transform.SetParent(container.transform, false);
-
-            var tmp = confirmTextObj.AddComponent<TextMeshProUGUI>();
-            tmp.text = GetString("ConfirmCloseMeetingMessage");
-            tmp.alignment = TextAlignmentOptions.Center;
-            tmp.fontSize = 36f;
-            tmp.color = Color.yellow;
-
-            RectTransform rect = tmp.rectTransform;
-            rect.sizeDelta = new Vector2(600, 100);
-            rect.anchoredPosition = new Vector2(0, 120f);
-
-            GameObject yesButtonObj = new GameObject("YesCloseButton");
-            yesButtonObj.transform.SetParent(container.transform, false);
-
-            var yesRect = yesButtonObj.AddComponent<RectTransform>();
-            yesRect.sizeDelta = new Vector2(200, 70);
-            yesRect.anchoredPosition = new Vector2(-150, -40);
-
-            var yesImage = yesButtonObj.AddComponent<Image>();
-            yesImage.color = new Color(0.2f, 0.8f, 0.2f, 1f);
-
-            var yesButton = yesButtonObj.AddComponent<Button>();
-            yesButton.onClick.AddListener((UnityEngine.Events.UnityAction)(() =>
-            {
-                __instance.playerStates.ToList().ForEach(x => x.gameObject.SetActive(true));
-                __instance.SkipVoteButton.gameObject.SetActive(true);
-
-                if (closeMeetingButton != null)
-                    closeMeetingButton.gameObject.SetActive(true);
-
-                if (smallRightButton != null)
-                    smallRightButton.gameObject.SetActive(true);
-
-                UnityEngine.Object.Destroy(closeMeetingConfirmUI);
-                closeMeetingConfirmUI = null;
-
-                PlayerControl.LocalPlayer.StartCoroutine(Utils.DelayedCloseMeeting());
-            }));
-
-            GameObject yesTextObj = new GameObject("YesCloseText");
-            yesTextObj.transform.SetParent(yesButtonObj.transform, false);
-
-            var yesTMP = yesTextObj.AddComponent<TextMeshProUGUI>();
-            yesTMP.text = GetString("YesButtonText");
-            yesTMP.alignment = TextAlignmentOptions.Center;
-            yesTMP.fontSize = 30;
-            yesTMP.color = Color.black;
-
-            var yesTMPRect = yesTMP.GetComponent<RectTransform>();
-            yesTMPRect.anchorMin = Vector2.zero;
-            yesTMPRect.anchorMax = Vector2.one;
-            yesTMPRect.offsetMin = Vector2.zero;
-            yesTMPRect.offsetMax = Vector2.zero;
-
-            GameObject noButtonObj = new GameObject("NoCloseButton");
-            noButtonObj.transform.SetParent(container.transform, false);
-
-            var noRect = noButtonObj.AddComponent<RectTransform>();
-            noRect.sizeDelta = new Vector2(200, 70);
-            noRect.anchoredPosition = new Vector2(150, -40);
-
-            var noImage = noButtonObj.AddComponent<Image>();
-            noImage.color = new Color(0.8f, 0.2f, 0.2f, 1f);
-
-            var noButton = noButtonObj.AddComponent<Button>();
-            noButton.onClick.AddListener((UnityEngine.Events.UnityAction)(() =>
-            {
-                __instance.playerStates.ToList().ForEach(x => x.gameObject.SetActive(true));
-                __instance.SkipVoteButton.gameObject.SetActive(true);
-
-                if (closeMeetingButton != null)
-                    closeMeetingButton.gameObject.SetActive(true);
-
-                if (smallRightButton != null)
-                    smallRightButton.gameObject.SetActive(true);
-
-                UnityEngine.Object.Destroy(closeMeetingConfirmUI);
-                closeMeetingConfirmUI = null;
-            }));
-
-            GameObject noTextObj = new GameObject("NoCloseText");
-            noTextObj.transform.SetParent(noButtonObj.transform, false);
-
-            var noTMP = noTextObj.AddComponent<TextMeshProUGUI>();
-            noTMP.text = GetString("NoButtonText");
-            noTMP.alignment = TextAlignmentOptions.Center;
-            noTMP.fontSize = 30;
-            noTMP.color = Color.black;
-
-            var noTMPRect = noTMP.GetComponent<RectTransform>();
-            noTMPRect.anchorMin = Vector2.zero;
-            noTMPRect.anchorMax = Vector2.one;
-            noTMPRect.offsetMin = Vector2.zero;
-            noTMPRect.offsetMax = Vector2.zero;
+            Utils.SondaggioChiusuraMeeting(__instance);
         }
 
         public static void ResetForNewGame()

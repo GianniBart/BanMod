@@ -1,6 +1,5 @@
 //credits and licenses in the resources folder
 using AmongUs.GameOptions;
-using BanMod.Modules.CustomHats;
 using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Logging;
@@ -8,6 +7,7 @@ using BepInEx.Unity.IL2CPP;
 using HarmonyLib;
 using Hazel;
 using Il2CppInterop.Runtime.Injection;
+using Il2CppSystem.Runtime.Remoting.Messaging;
 using InnerNet;
 using Sentry.Unity.NativeUtils;
 using System;
@@ -31,9 +31,9 @@ public partial class BanMod : BasePlugin
 {
     public static BanMod Instance;
     public Harmony Harmony { get; } = new(PluginGuid);
-    public static string modVersion = "3.9.8";
+    public static string modVersion = "4.5.3";
     public const string PluginGuid = "com.GianniBart.BanMod";
-    public const string PluginVersion = "3.9.8";
+    public const string PluginVersion = "4.5.3";
     public const string VersionRequired = PluginVersion;
     public static Version version = Version.Parse(PluginVersion);
     public static List<string> supportedAU = new List<string> { "2026.9.29" };
@@ -117,7 +117,7 @@ public partial class BanMod : BasePlugin
     public static readonly bool ShowKaitoButton = true;
     public static readonly bool ShowDiscordButton = true;
     public static bool ShowCommunityButton = true;
-    public static readonly string GitsiteUrl = "https://github.com/GiannBart/BanMod";
+    public static readonly string GitsiteUrl = "https://github.com/GianniBart/BanMod";
     public static readonly string LobbysiteUrl = "https://banmod.online/";
     public static readonly string DiscordInviteUrl = "https://discord.gg/HGEBsm3vps";
     public static readonly string KaitositeUrl = "https://telegra.ph/KaitoRun-Fungle-Lobby-11-16";
@@ -375,7 +375,6 @@ public partial class BanMod : BasePlugin
             HostSelfSetTimes = new List<DateTime>();
         }
     }
-    public static bool UnlockingAllChat = false;
     public static ConfigEntry<bool> EnableMatchLog { get; private set; }
     public static ConfigEntry<bool> EnableChatLog { get; private set; }
     public static ConfigEntry<bool> ShowFPS { get; private set; }
@@ -385,7 +384,6 @@ public partial class BanMod : BasePlugin
     public static ConfigEntry<bool> AktiveLobby { get; private set; }
     public static ConfigEntry<bool> HalloweenDecorations { get; private set; }
     public static ConfigEntry<bool> AnniversaryDecorations { get; private set; }
-    public static ConfigEntry<bool> CustomSkin { get; private set; }
     public static ConfigEntry<bool> AktiveChat { get; private set; }
     public static ConfigEntry<bool> EnableGhostChat { get; private set; }
     
@@ -395,7 +393,6 @@ public partial class BanMod : BasePlugin
     public static ConfigEntry<bool> AddBanToList { get; private set; }
     public static ConfigEntry<bool> NoGameEnd { get; private set; }
     public static ConfigEntry<bool> EnableZoom { get; private set; }
-    public static ConfigEntry<bool> EnableAllChat { get; private set; }
     public static ConfigEntry<bool> SwitchVanilla { get; private set; }
     public static ConfigEntry<bool> SeeRoleMeeting { get; private set; }
     public static ConfigEntry<bool> VoteLockEnabled { get; private set; }
@@ -480,13 +477,11 @@ public partial class BanMod : BasePlugin
         AddBanToList = Config.Bind("Client Options", "AddBanToList", true);
         NoGameEnd = Config.Bind("Client Options", "NoGameEnd", false);
         EnableZoom = Config.Bind("Client Options", "EnableZoom", false);
-        EnableAllChat = Config.Bind("Client Options", "EnableAllChat", false);
         SeeRoleMeeting = Config.Bind("Client Options", "SeeRoleMeeting", true);
         VoteLockEnabled = Config.Bind("Client Options", "VoteLockEnabled", true);
         SwitchVanilla = Config.Bind("Client Options", "SwitchVanilla", false);
         HalloweenDecorations = Config.Bind("Decorations", "HalloweenDecorations", false, "Enable Halloween decorations");
         AnniversaryDecorations = Config.Bind("Decorations", "AnniversaryDecorations", false, "Enable Anniversary decorations");
-        CustomSkin = Config.Bind("Decorations", "CustomSkin", false, "Enable CustomSkin");
         SeasonalModeController.Normalize();
 
         CustomMouse = Config.Bind("Client Options", "CustomMouse", false, "Enable or Disable Custom_Cursor");
@@ -519,7 +514,6 @@ public partial class BanMod : BasePlugin
         ClassInjector.RegisterTypeInIl2Cpp<PremiumChatUI>();
         ClassInjector.RegisterTypeInIl2Cpp<PreviousMatchSummaryUi>();
         ClassInjector.RegisterTypeInIl2Cpp<SetPlayerUi>();
-        ClassInjector.RegisterTypeInIl2Cpp<CustomHatSceneRenderer>();
         ClassInjector.RegisterTypeInIl2Cpp<BanModCommunicationUi>();
         ClassInjector.RegisterTypeInIl2Cpp<BanModLoginUi>();
         ClassInjector.RegisterTypeInIl2Cpp<PresetMenuUi>();
@@ -585,6 +579,7 @@ public partial class BanMod : BasePlugin
         MsgMenu.Initialize();
         OptionSaver.Initialize();
         AllowedManager.Initialize();
+        LobbyInfoBar.Init(Config);
         try { CheaterManager.Initialize(); } catch (Exception ex) { try { BMLogger.LogError("[BANMOD] CheaterManager.Initialize failed: " + ex.Message); } catch { } }
         try { TeamerManager.Initialize(); } catch (Exception ex) { try { BMLogger.LogError("[BANMOD] TeamerManager.Initialize failed: " + ex.Message); } catch { } }
         SetRecommendationsPatch.LoadUserPresetFile(1);
@@ -611,7 +606,6 @@ public partial class BanMod : BasePlugin
         AddComponent<PreviousMatchSummaryUi>();
         AddComponent<BanModCommunicationUi>();
         AddComponent<BanModLoginUi>();
-        AddComponent<CustomHatSceneRenderer>();
         AddComponent<PresetMenuUi>();
         AddComponent<ServerSelectionMenu>();
         AddComponent<AutoFriendInviteUi>();
@@ -620,7 +614,7 @@ public partial class BanMod : BasePlugin
         LiveTranslator.Initialize(Config);
 
         BMLogger.LogInfo("[BanMod] BanModManager creato e avviato correttamente ✅");
-        TracersHandler.ArrowSprite = LoadSprite("BanMod.Resources.image.Arrow.png", 100f);
+        //TracersHandler.ArrowSprite = LoadSprite("BanMod.Resources.image.Arrow.png", 100f);
         if (BanMod.RoomZoneManagerInstance == null)
             BanMod.RoomZoneManagerInstance = new RoomZoneManager();
 
@@ -628,7 +622,6 @@ public partial class BanMod : BasePlugin
         OptionSaver.Load();
         LoadHostSetTimes();
         FixedUpdateUnifiedPatch.LoadCustomNames();
-        CustomHatManager.InitEmbeddedHats();
         Harmony.PatchAll();
         BMLogger.LogInfo("BanMod loaded successfully!");
         visualOptions.LoadSettings();
@@ -647,6 +640,7 @@ public partial class BanMod : BasePlugin
 
     public class BanModUpdateHandler : MonoBehaviour
     {
+        private float _nextNoGameEndWarning;
         void Update()
         {
             try
@@ -656,15 +650,22 @@ public partial class BanMod : BasePlugin
                     GameSettingMenuPatch.SettingsTab.gameObject != null &&
                     GameSettingMenuPatch.SettingsTab.gameObject.activeInHierarchy;
 
-                if (GameStates.isLobby &&
-                    Options.GameMode != null &&
-                    !Options.GameMode.GetValue(GameModeType.BanMod))
+                if (BanMod.NoGameEnd.Value && (GameStates.isLobby || GameStates.IsInTask))
                 {
-                    if (Options.DisableRole != null &&
-                        Options.DisableRole.GetBool())
+                    if (Time.realtimeSinceStartup >= _nextNoGameEndWarning &&
+                        HudManager.Instance?.Notifier != null)
                     {
-                        BanMod.DisableAllRoles();
+                        NotificationPopper_AddInfoMessagePatch.AddInfoMessage(
+                            HudManager.Instance.Notifier,
+                            "WARNING: No Game End option is active"
+                        );
+
+                        _nextNoGameEndWarning = Time.realtimeSinceStartup + 60f;
                     }
+                }
+                else
+                {
+                    _nextNoGameEndWarning = 0f;
                 }
                 if (GameStates.isLobby)
                 {
@@ -721,38 +722,38 @@ public partial class BanMod : BasePlugin
                     return;
                 }
 
-                if (Options.TrackImpostorTeammate == null ||
-                    !Options.TrackImpostorTeammate.GetBool())
-                {
-                    TracersHandler.HideAllArrows();
-                    return;
-                }
+                //if (Options.TrackImpostorTeammate == null ||
+                //    !Options.TrackImpostorTeammate.GetBool())
+                //{
+                //    TracersHandler.HideAllArrows();
+                //    return;
+                //}
 
-                var allPlayers = BanMod.AllPlayerControls;
+                //var allPlayers = BanMod.AllPlayerControls;
 
-                if (allPlayers == null)
-                    return;
+                //if (allPlayers == null)
+                //    return;
 
-                foreach (var player in allPlayers)
-                {
-                    try
-                    {
-                        if (player == null ||
-                            player.Data == null ||
-                            player.Data.Disconnected)
-                        {
-                            continue;
-                        }
+                //foreach (var player in allPlayers)
+                //{
+                //    try
+                //    {
+                //        if (player == null ||
+                //            player.Data == null ||
+                //            player.Data.Disconnected)
+                //        {
+                //            continue;
+                //        }
 
-                        TracersHandler.drawPlayerArrow(player);
-                    }
-                    catch (Exception e)
-                    {
-                        Debug.LogWarning(
-                            "[BanMod] Errore drawPlayerArrow: " + e
-                        );
-                    }
-                }
+                //        TracersHandler.drawPlayerArrow(player);
+                //    }
+                //    catch (Exception e)
+                //    {
+                //        Debug.LogWarning(
+                //            "[BanMod] Errore drawPlayerArrow: " + e
+                //        );
+                //    }
+                //}
             }
             catch (Exception e)
             {

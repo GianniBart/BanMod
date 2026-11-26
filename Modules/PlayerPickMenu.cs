@@ -159,6 +159,12 @@ namespace BanMod
             if (!PlayerPickMenu.IsActive)
                 return true;
 
+            if (__instance == null)
+                return false;
+
+            if (playerInfo == null || playerInfo.Disconnected)
+                return false;
+
             __instance.shapeshift = onShift;
             __instance.PlayerIcon.SetFlipX(false);
             __instance.PlayerIcon.ToggleName(false);

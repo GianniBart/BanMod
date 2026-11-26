@@ -31,6 +31,7 @@ using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -68,6 +69,7 @@ using CollectionExtensions = System.Collections.Generic.CollectionExtensions;
 using Cursor = UnityEngine.Cursor;
 using DataReceivedEventArgs = Hazel.DataReceivedEventArgs;
 using DateTime = System.DateTime;
+using Debug = UnityEngine.Debug;
 using Enum = System.Enum;
 using Exception = System.Exception;
 using Label = System.Reflection.Emit.Label;
@@ -78,68 +80,68 @@ using Type = System.Type;
 
 namespace BanMod;
 
-[HarmonyPatch(typeof(PingTracker), nameof(PingTracker.Update))]
-public static class PingTracker_Update
-{
-    public static void Postfix(PingTracker __instance)
-    {
-        if (AmongUsClient.Instance == null || __instance.text == null)
-            return;
+//[HarmonyPatch(typeof(PingTracker), nameof(PingTracker.Update))]
+//public static class PingTracker_Update
+//{
+//    public static void Postfix(PingTracker __instance)
+//    {
+//        if (AmongUsClient.Instance == null || __instance.text == null)
+//            return;
 
-        __instance.text.alignment = TextAlignmentOptions.Center;
-        __instance.aspectPosition.DistanceFromEdge = new Vector3(0f, 0.50f, 0f);
+//        __instance.text.alignment = TextAlignmentOptions.Center;
+//        __instance.aspectPosition.DistanceFromEdge = new Vector3(0f, 0.50f, 0f);
 
-        string finalText = Utils.getColoredPingText(
-            AmongUsClient.Instance.Ping
-        );
+//        string finalText = Utils.getColoredPingText(
+//            AmongUsClient.Instance.Ping
+//        );
 
-        int myVotes = 0;
+//        int myVotes = 0;
 
-        if (!AmongUsClient.Instance.AmHost)
-        {
-            myVotes = VoteBanTracker.GetVoteCount(
-                AmongUsClient.Instance.ClientId
-            );
-        }
+//        if (!AmongUsClient.Instance.AmHost)
+//        {
+//            myVotes = VoteBanTracker.GetVoteCount(
+//                AmongUsClient.Instance.ClientId
+//            );
+//        }
 
-        if (myVotes > 0)
-        {
-            string voteColor = "#FFFF00";
+//        if (myVotes > 0)
+//        {
+//            string voteColor = "#FFFF00";
 
-            if (myVotes >= 2)
-            {
-                bool isFlashOn =
-                    Mathf.FloorToInt(Time.time * 4f) % 2 == 0;
+//            if (myVotes >= 2)
+//            {
+//                bool isFlashOn =
+//                    Mathf.FloorToInt(Time.time * 4f) % 2 == 0;
 
-                voteColor = isFlashOn ? "#FF0000" : "#FFFF00";
-            }
+//                voteColor = isFlashOn ? "#FF0000" : "#FFFF00";
+//            }
 
-            finalText +=
-                $" | <color={voteColor}>Kicks: {myVotes}/3</color>";
-        }
+//            finalText +=
+//                $" | <color={voteColor}>Kicks: {myVotes}/3</color>";
+//        }
 
-        if (BanMod.ShowFPS.Value)
-        {
-            float deltaTime = Mathf.Max(Time.unscaledDeltaTime, 0.0001f);
-            int fps = Mathf.RoundToInt(1f / deltaTime);
+//        if (BanMod.ShowFPS.Value)
+//        {
+//            float deltaTime = Mathf.Max(Time.unscaledDeltaTime, 0.0001f);
+//            int fps = Mathf.RoundToInt(1f / deltaTime);
 
-            string fpsColor;
+//            string fpsColor;
 
-            if (fps < 20)
-                fpsColor = "#FF0000";
-            else if (fps < 40)
-                fpsColor = "#FFFF00";
-            else
-                fpsColor = "#00FF00";
+//            if (fps < 20)
+//                fpsColor = "#FF0000";
+//            else if (fps < 40)
+//                fpsColor = "#FFFF00";
+//            else
+//                fpsColor = "#00FF00";
 
-            finalText +=
-                $"\n<color=#00FFFF>FPS:</color> " +
-                $"<color={fpsColor}>{fps}</color>";
-        }
+//            finalText +=
+//                $"\n<color=#00FFFF>FPS:</color> " +
+//                $"<color={fpsColor}>{fps}</color>";
+//        }
 
-        __instance.text.text = finalText;
-    }
-}
+//        __instance.text.text = finalText;
+//    }
+//}
 
 
 [HarmonyPatch(typeof(HudManager), nameof(HudManager.Update))]
@@ -488,7 +490,7 @@ public static class LogicOptions_GetAnonymousVotes
     public static void Postfix(ref bool __result)
     {
         if (!AmongUsClient.Instance.AmHost) return;
-        if (Options.revealVotes.GetBool())
+        if ((BanMod.GM.Value) || (ForcedRoleSystem.GM))
         {
             __result = false;
         }
@@ -501,7 +503,7 @@ public static class LogicOptionsNormal_GetAnonymousVotes
     public static void Postfix(ref bool __result)
     {
         if (!AmongUsClient.Instance.AmHost) return;
-        if (Options.revealVotes.GetBool())
+        if ((BanMod.GM.Value) || (ForcedRoleSystem.GM))
         {
             __result = false;
         }
@@ -969,5 +971,41 @@ public static class ReactorCountdownGetterFix
     {
         __result = __instance._Countdown_k__BackingField;
         return false;
+    }
+}
+[HarmonyPatch(
+    typeof(SecurityCameraSystemType),
+    nameof(SecurityCameraSystemType.UpdateSystem))]
+public static class SecurityCameraSystemType_UpdateSystem_Patch
+{
+    public static bool Prefix(
+        [HarmonyArgument(1)] MessageReader msgReader)
+    {
+        if (!AmongUsClient.Instance.AmHost)
+            return true;
+
+        if (!VanillaDeviceBlocker.ShouldBlockCameras())
+            return true;
+
+        if (msgReader == null ||
+            msgReader.BytesRemaining <= 0)
+        {
+            return true;
+        }
+
+        MessageReader readerCopy =
+            MessageReader.Get(msgReader);
+
+        byte operation = readerCopy.ReadByte();
+
+        readerCopy.Recycle();
+
+        if (operation ==
+            SecurityCameraSystemType.IncrementOp)
+        {
+            return false;
+        }
+
+        return true;
     }
 }

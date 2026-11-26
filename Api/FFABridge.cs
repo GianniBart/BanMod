@@ -243,6 +243,10 @@ public static class FfaExternalBridge
     public static void SyncAll(
         bool force = false)
     {
+        // Joined clients consume the host snapshot; never overwrite it with local presets.
+        if (AmongUsClient.Instance != null && AmongUsClient.Instance.GameId != 0 &&
+            !AmongUsClient.Instance.AmHost)
+            return;
         if (!TryResolve())
             return;
 
@@ -422,6 +426,49 @@ public static class FfaExternalBridge
                 )
             );
         }
+    }
+
+    internal static void ApplyReceivedMode(int mode)
+    {
+        if (AmongUsClient.Instance == null || AmongUsClient.Instance.AmHost) return;
+        UpdateModeSelection(mode);
+    }
+
+    internal static void ApplyHostMode(int mode)
+    {
+        if (AmongUsClient.Instance == null || !AmongUsClient.Instance.AmHost) return;
+        UpdateModeSelection(mode);
+    }
+
+    private static void UpdateModeSelection(int mode)
+    {
+        if (Options.GameMode == null || mode < 0 || mode > 5) return;
+        if (GameStates.isHideNSeek)
+        {
+            // Hide N Seek uses EnableFFA, not the Classic GameMode selector.
+            // Selecting GameModeType.FFA here fights the HnS menu's Default reset
+            // on every snapshot and repeatedly closes/reopens the settings UI.
+            if ((mode == 0 || mode == 1) && Options.EnableFFA != null)
+            {
+                bool enabled = mode == 1;
+                if (Options.EnableFFA.GetBool() != enabled)
+                    Options.EnableFFA.SetValue(enabled ? 1 : 0, false);
+            }
+            return;
+        }
+        GameModeType selected = mode switch
+        {
+            1 => GameModeType.FFA,
+            2 => GameModeType.FFATeam,
+            3 => GameModeType.HotPotatoModded,
+            4 => GameModeType.Assassin,
+            5 => GameModeType.KillRace,
+            _ => GameModeType.Default
+        };
+        // An inactive FFA snapshot must not replace another non-FFA game mode.
+        if (mode == 0 && !IsExternalFfaModeSelected()) return;
+        if (Options.GameMode.Selected == selected || !Options.GameMode.GetOrder().Contains(selected)) return;
+        Options.GameMode.SetValue(selected, false);
     }
 
     public static void SyncGameMode()

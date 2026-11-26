@@ -461,12 +461,13 @@ public static class VersionShower_Start
     private static void Postfix(VersionShower __instance)
     {
         if (BanMod.IsBanModDisabled) return;
-        BanMod.credentialsText = $"<b><size=120%><color={BanMod.ModColor}>BanMod</color></b>\n<color=#a54aff>By <color=#f34c50>Bart</color><color=#e0ffff><size=50%>   {BanMod.modVersion}</color>";
+        BanMod.credentialsText = $"<b><size=120%><color={BanMod.ModColor}>BanMod</color></b> <color=#a54aff>By <color=#f34c50>Bart</color> <color=#e0ffff><size=75%>(Version:{BanMod.modVersion})</color>";
         var credentials = UnityEngine.Object.Instantiate(__instance.text);
         credentials.text = BanMod.credentialsText;
         credentials.alignment = TextAlignmentOptions.Left;
-        credentials.transform.position = new Vector3(1f, 2.67f, -2f);
+        credentials.transform.position = new Vector3(-2.80f, -2.77f, -2f);
         credentials.fontSize = credentials.fontSizeMax = credentials.fontSizeMin = 2f;
+        __instance.text.gameObject.SetActive(false);
     }
 }
 

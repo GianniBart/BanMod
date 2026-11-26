@@ -85,6 +85,8 @@ namespace BanMod
 
         private bool showMenu = false;
         private bool popupVisible = false;
+        private bool acknowledgementPending;
+        private int popupRevision;
         private bool popupIsReportChat = false;
         private bool isSending = false;
         private bool customRolesEnabled = false;
@@ -226,9 +228,22 @@ namespace BanMod
         }
 
         [HideFromIl2Cpp]
+        internal bool TryShowBackgroundMessagePopup(string title, string content, Action onClose)
+        {
+            if (acknowledgementPending || popupVisible) return false;
+            ShowMessagePopup(title, content, onClose);
+            return popupVisible;
+        }
+
+        [HideFromIl2Cpp]
         public void ShowMessagePopup(string title, string content, Action onClose = null)
         {
+            // A security acknowledgement must never be replaced by a background message.
+            if (acknowledgementPending) return;
             BuildUiIfNeeded();
+            popupRevision++;
+            if (popupCloseButton != null)
+                SetText(popupCloseButton.GetComponentInChildren<TextMeshProUGUI>(), T("Comm_ClosePopup", "Close popup"));
 
             InvokeCurrentPopupCallbackBeforeReplace();
             popupOnClose = onClose;
@@ -246,7 +261,18 @@ namespace BanMod
             RefreshVisibility();
             PrepareSimplePopupVisuals(safeTitle, safeContent);
 
-            RunCommunicationCoroutine(RefreshSimplePopupNextFrames(safeTitle, safeContent));
+            RunCommunicationCoroutine(RefreshSimplePopupNextFrames(safeTitle, safeContent, popupRevision));
+        }
+
+        [HideFromIl2Cpp]
+        public bool ShowSecurityAcknowledgement(string title, string content, Action onOk)
+        {
+            if (acknowledgementPending) return false;
+            ShowMessagePopup(title, content, onOk);
+            if (popupPanel == null || popupCloseButton == null) return false;
+            acknowledgementPending = true;
+            SetText(popupCloseButton.GetComponentInChildren<TextMeshProUGUI>(), "OK");
+            return true;
         }
 
         private void PrepareSimplePopupVisuals(string title, string content)
@@ -295,18 +321,18 @@ namespace BanMod
         }
 
         [HideFromIl2Cpp]
-        private IEnumerator RefreshSimplePopupNextFrames(string title, string content)
+        private IEnumerator RefreshSimplePopupNextFrames(string title, string content, int revision)
         {
             yield return null;
 
-            if (!popupVisible || popupIsReportChat)
+            if (!popupVisible || popupIsReportChat || revision != popupRevision)
                 yield break;
 
             PrepareSimplePopupVisuals(title, content);
 
             yield return null;
 
-            if (!popupVisible || popupIsReportChat)
+            if (!popupVisible || popupIsReportChat || revision != popupRevision)
                 yield break;
 
             PrepareSimplePopupVisuals(title, content);
@@ -315,10 +341,11 @@ namespace BanMod
         [HideFromIl2Cpp]
         public void ShowReportChatPopup(BanModCommunicationManager.ReportSummary report, Action onClose = null)
         {
-            if (report == null || report.Id <= 0)
+            if (acknowledgementPending || report == null || report.Id <= 0)
                 return;
 
             BuildUiIfNeeded();
+            popupRevision++;
 
             InvokeCurrentPopupCallbackBeforeReplace();
             popupOnClose = onClose;
@@ -373,6 +400,8 @@ namespace BanMod
 
             Action callback = popupOnClose;
             popupVisible = false;
+            acknowledgementPending = false;
+            popupRevision++;
             popupIsReportChat = false;
             popupReportId = 0;
             popupReportIsOpen = false;

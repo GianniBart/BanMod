@@ -88,11 +88,9 @@ namespace BanMod
     public enum GameModeType
     {
         SnS = 0,
-        BanMod = 1,
         KaitoRun = 2,
         Default = 3,
         TaskRun = 4,
-        JBMode = 5,
         FFA = 6,
         ZombieMode = 7,
         PnS = 8,
@@ -238,9 +236,6 @@ namespace BanMod
                 case GameModeType.HotPotatoModded:
                     return LoadOrCreateGameModePreset("HotPotato.json", CreateHotPotatoDefaults());
 
-                case GameModeType.BanMod:
-                    return LoadOrCreateGameModePreset("BanMod.json", CreateBanModDefaults());
-
                 case GameModeType.KaitoRun:
                     return LoadOrCreateGameModePreset("KaitoRun.json", CreateKaitoRunDefaults());
 
@@ -249,9 +244,6 @@ namespace BanMod
 
                 case GameModeType.TaskRun:
                     return LoadOrCreateGameModePreset("TaskRun.json", CreateTaskRunDefaults());
-
-                case GameModeType.JBMode:
-                    return LoadOrCreateGameModePreset("JBMode.json", CreateJBModeDefaults());
 
                 case GameModeType.FFA:
                     return LoadOrCreateGameModePreset("FFA.json", CreateFFAModeDefaults());
@@ -1004,11 +996,9 @@ namespace BanMod
                 case GameModeType.PnS: return "PnS";
                 case GameModeType.HotPotatoModded: return "HotPotato";
                 case GameModeType.ZombieMode: return "ZombieMode";
-                case GameModeType.BanMod: return "BanMod";
                 case GameModeType.KaitoRun: return "KaitoRun";
                 case GameModeType.Default: return "Default";
                 case GameModeType.TaskRun: return "TaskRun";
-                case GameModeType.JBMode: return "JBMode";
                 case GameModeType.FFA: return "FFA";
                 case GameModeType.FFATeam: return "FFATeam";
                 case GameModeType.Assassin: return "Assassin";
@@ -1100,11 +1090,9 @@ namespace BanMod
                     GetGameModePresetName(GameModeType.PnS),
                     GetGameModePresetName(GameModeType.HotPotatoModded),
                     GetGameModePresetName(GameModeType.ZombieMode),
-                    GetGameModePresetName(GameModeType.BanMod),
                     GetGameModePresetName(GameModeType.KaitoRun),
                     GetGameModePresetName(GameModeType.Default),
                     GetGameModePresetName(GameModeType.TaskRun),
-                    GetGameModePresetName(GameModeType.JBMode),
                     GetGameModePresetName(GameModeType.RoomRush),
                     GetGameModePresetName(GameModeType.DeathRun),
                     GetGameModePresetName(GameModeType.TargetRush),
@@ -1156,9 +1144,6 @@ namespace BanMod
                 case GameModeType.ZombieMode:
                     return "ZombieMode.json";
 
-                case GameModeType.BanMod:
-                    return "BanMod.json";
-
                 case GameModeType.KaitoRun:
                     return "KaitoRun.json";
 
@@ -1167,9 +1152,6 @@ namespace BanMod
 
                 case GameModeType.TaskRun:
                     return "TaskRun.json";
-
-                case GameModeType.JBMode:
-                    return "JBMode.json";
 
                 case GameModeType.RoomRush:
                     return "RoomRush.json";

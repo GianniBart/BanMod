@@ -402,11 +402,11 @@ public static class BanManager
             }
         }
 
-        BMLogger.Info(
-            $"[BanMod] Controlli completati: " +
-            $"name={realName}, " +
-            $"clientId={clientId}"
-        );
+        //BMLogger.Info(
+        //    $"[BanMod] Controlli completati: " +
+        //    $"name={realName}, " +
+        //    $"clientId={clientId}"
+        //);
     }
     public static string GetResourcesTxt(string path)
     {
@@ -434,12 +434,13 @@ public static class BanManager
         return string.Concat(sha256Hash.AsSpan(0, 5), sha256Hash.AsSpan(sha256Hash.Length - 4));
     }
 
-    public static void AddBanPlayer(ClientData player, string reason = "ManualBan", bool fromModeratorCommand = false)
+    public static void AddBanPlayer(ClientData player, string reason = "ManualBan", bool fromModeratorCommand = false, bool forceSave = false)
     {
         if (player == null)
             return;
 
-        if (!AmongUsClient.Instance.AmHost || !BanMod.AddBanToList.Value)
+        if (!AmongUsClient.Instance.AmHost ||
+            (!BanMod.AddBanToList.Value && !forceSave))
             return;
 
         if (SilentPermanentFriendCodeBan.ShouldSuppressBanManagerWrite(player))
@@ -653,6 +654,8 @@ public static class BanManager
         string realName = BanMod.GetRealPlayerName(player);
         string friendcode = player?.FriendCode;
 
+        int separator = friendcode?.IndexOf('#') ?? -1;
+
         if (Options.CheckFriendCode.GetBool() && friendcode?.Length < 10)
         {
             AmongUsClient.Instance.KickPlayer(player.Id, true);
@@ -674,8 +677,9 @@ public static class BanManager
             return;
         }
 
-        const string pattern = @"[\W\d]";
-        if (Options.CheckFriendCode.GetBool() && Regex.IsMatch(friendcode[..friendcode.IndexOf("#", StringComparison.Ordinal)], pattern))
+        const string pattern = @"\W";
+
+        if (Options.CheckFriendCode.GetBool() && (separator <= 0 || separator == friendcode.Length - 1 || Regex.IsMatch(friendcode[..separator], pattern)))
         {
             AmongUsClient.Instance.KickPlayer(player.Id, true);
             NotificationPopper_AddInfoMessagePatch.AddInfoMessage(HudManager.Instance.Notifier, $"{realName} {Translator.GetString("PlayerCodeInvalid")}");

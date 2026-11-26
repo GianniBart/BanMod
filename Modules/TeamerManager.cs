@@ -460,7 +460,7 @@ namespace BanMod
 
                 if ((int)response.StatusCode == 401)
                 {
-                    BanModApiTokenManager.ClearToken();
+                    BanModApiTokenManager.ClearToken(apiFriendCode, clientToken);
                     return false;
                 }
 

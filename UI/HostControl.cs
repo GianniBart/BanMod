@@ -1,4 +1,5 @@
 //credits and licenses in the resources folder
+using System;
 using UnityEngine;
 using System.Collections.Generic;
 using static BanMod.Translator;
@@ -9,8 +10,12 @@ namespace BanMod
     {
         public bool showMenu = false;
         private Rect windowRect;
-        private Vector2 windowSize = new Vector2(750, 600); 
+        private Vector2 windowSize = new Vector2(750, 600);
         private Vector2 scrollPosition = Vector2.zero;
+        private bool showBotList;
+        private Vector2 botScroll;
+        private string botSearch = "";
+        private string botStatus = "";
 
         public enum ItemType { Button, Toggle }
 
@@ -46,6 +51,7 @@ namespace BanMod
         private void HandlePanelChanged(MenuRouter.Panel p)
         {
             showMenu = (p == MenuRouter.Panel.Host);
+            showBotList = false;
             if (showMenu)
             {
                 SetupMenuContent();
@@ -56,6 +62,8 @@ namespace BanMod
         void Update()
         {
             if (BanMod.IsBanModDisabled) return;
+
+            SharedBotList.Tick();
 
             if (KeyBindOptions.IsBindingActive) return;
 
@@ -80,11 +88,27 @@ namespace BanMod
             menuItems.Add(new MenuItem { Label = GetString("DestroyLobbyAction"), Type = ItemType.Button, OnClick = () => { ChatCommands.HandleCommand("/destroy", new string[] { "/destroy" }, ""); } });
             menuItems.Add(new MenuItem { Label = GetString("RecreateLobbyAction"), Type = ItemType.Button, OnClick = () => { ChatCommands.HandleCommand("/lobby", new string[] { "/lobby" }, ""); } });
             menuItems.Add(new MenuItem { Label = GetString("Host_SendInfo"), Type = ItemType.Button, OnClick = () => { ChatCommands.HandleCommand("/m", new string[] { "/m" }, ""); } });
+
+            if (SharedBotList.CanManage())
+            {
+                menuItems.Add(new MenuItem
+                {
+                    Label = "Lista bot",
+                    Type = ItemType.Button,
+                    OnClick = () =>
+                    {
+                        showBotList = true;
+                        botScroll = Vector2.zero;
+                        botStatus = "";
+                    }
+                });
+            }
         }
 
         public void OpenMenu()
         {
             SetupMenuContent();
+            showBotList = false;
             showMenu = true;
             CenterWindow();
         }
@@ -92,6 +116,7 @@ namespace BanMod
         public void CloseMenu()
         {
             showMenu = false;
+            showBotList = false;
         }
 
         public bool IsOpen() => showMenu;
@@ -127,19 +152,96 @@ namespace BanMod
 
         void OnGUI()
         {
-            if (!showMenu) return;
-            if (Event.current.isMouse)
-            {
-                Event.current.Use();
-            }
+            if (!showMenu || BanMod.IsBanModDisabled)
+                return;
             EnsureStyles();
 
             GUI.backgroundColor = Color.white;
             windowRect = GUI.Window(4, windowRect, (GUI.WindowFunction)DrawWindow, "", BanModUiStyles.BlackWindow);
+
+            if (Event.current.isMouse && windowRect.Contains(Event.current.mousePosition))
+                Event.current.Use();
+        }
+
+        private void DrawBotList()
+        {
+            GUILayout.Label("Lista bot", titleStyle);
+            GUILayout.Space(10);
+            GUILayout.Label("Cerca per nome o Friend Code");
+            botSearch = GUILayout.TextField(botSearch, 80);
+
+            if (!string.IsNullOrEmpty(botStatus))
+                GUILayout.Label(botStatus);
+
+            bool canManage = SharedBotList.CanManage();
+            if (!canManage)
+                GUILayout.Label("Puoi gestire la lista quando ospiti una lobby online.");
+
+            string query = botSearch.Trim();
+            var entries = SharedBotList.GetEntries();
+            bool found = false;
+
+            botScroll = GUILayout.BeginScrollView(botScroll);
+            foreach (var entry in entries)
+            {
+                if (query.Length > 0 &&
+                    (entry.PlayerName ?? "").IndexOf(query, StringComparison.OrdinalIgnoreCase) < 0 &&
+                    entry.FriendCode.IndexOf(query, StringComparison.OrdinalIgnoreCase) < 0)
+                    continue;
+
+                found = true;
+                GUILayout.BeginVertical(GUI.skin.box);
+                GUILayout.Label($"{entry.PlayerName} · {entry.FriendCode} · {entry.Reason}");
+
+                if (entry.FlaggedByOthers)
+                    GUILayout.Label("⚠ Segnalato come falso positivo da un altro utente");
+
+                if (entry.UnlockedByMe)
+                    GUILayout.Label("Sbloccato per me");
+
+                bool wasEnabled = GUI.enabled;
+                GUI.enabled = wasEnabled && canManage && !SharedBotList.IsBusy;
+                string label = entry.UnlockedByMe
+                    ? "Annulla sblocco"
+                    : "Segnala falso positivo e sblocca per me";
+
+                bool pressed = GUILayout.Button(label, buttonStyle, GUILayout.Height(34));
+                GUI.enabled = wasEnabled;
+
+                if (pressed)
+                {
+                    bool unlock = !entry.UnlockedByMe;
+                    botStatus = "Invio in corso…";
+                    SharedBotList.SetException(entry.FriendCode, unlock, success =>
+                    {
+                        botStatus = success
+                            ? (unlock ? "Segnalazione inviata. Sbloccato per te." : "Sblocco annullato.")
+                            : "Operazione non riuscita. Riprova tra poco.";
+                    });
+                }
+
+                GUILayout.EndVertical();
+                GUILayout.Space(5);
+            }
+
+            if (!found)
+                GUILayout.Label(SharedBotList.IsBusy ? "Caricamento…" : "Nessuna voce da mostrare.");
+
+            GUILayout.EndScrollView();
+
+            if (GUILayout.Button("Indietro", exitButtonStyle, GUILayout.Height(45)))
+                showBotList = false;
         }
 
         void DrawWindow(int id)
         {
+            if (showBotList)
+            {
+                DrawBotList();
+                GUI.DragWindow();
+                return;
+            }
+
             GUILayout.Label(GetString("HostControlMenu"), titleStyle);
             GUILayout.Space(10);
 
@@ -195,7 +297,7 @@ namespace BanMod
             {
                 MenuRouter.Open(MenuRouter.Panel.None);
             }
-            GUI.backgroundColor = Color.white; 
+            GUI.backgroundColor = Color.white;
 
             GUI.DragWindow();
         }

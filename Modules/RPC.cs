@@ -1,7 +1,6 @@
 ﻿
 //credits and licenses in the resources folder
 using AmongUs.GameOptions;
-using BanMod.Modules.CustomHats;
 using HarmonyLib;
 using Hazel;
 using InnerNet;
@@ -406,9 +405,6 @@ namespace BanMod
             if (Enum.IsDefined(typeof(CustomRPC), callId))
                 return false;
 
-            if (callId == (byte)CustomHatSync.RpcId)
-                return false;
-
             int action = GetConfiguredAction();
 
             if (KnownCheatRpcSignatures.TryGetValue(callId, out string probableMenu))
@@ -710,8 +706,7 @@ namespace BanMod
                 }
 
                 if (!isStandard &&
-                    !isCustom &&
-                    callIdByte != (byte)CustomHatSync.RpcId)
+                    !isCustom)
                 {
                     if (TryDetectForeignRpc(
                         __instance,
@@ -813,7 +808,6 @@ namespace BanMod
                     callIdByte != (byte)CustomRPC.HostRoleOptionsUpdate &&
                     callIdByte != (byte)CustomRPC.HandshakeModded &&
                     callIdByte != (byte)CustomRPC.FfaSettings &&
-                    callIdByte != (byte)CustomHatSync.RpcId &&
                     callIdByte != (byte)CustomRPC.ModdedHandshake)
                 {
                     try
@@ -868,21 +862,6 @@ namespace BanMod
 
                     return false;
                 }
-
-                if (callIdByte == CustomHatSync.RpcId)
-                {
-                    try
-                    {
-                        CustomHatSync.ReceiveRpc(subReader);
-                    }
-                    catch (Exception ex)
-                    {
-                        BMLogger.Warn($"Invalid CustomHatSync RPC 240 from {name}: {ex.Message}", LogTag);
-                    }
-
-                    return false;
-                }
-
 
                 if (isCustom)
                 {
@@ -1440,13 +1419,8 @@ namespace BanMod
         {
             try
             {
-                if (AmongUsClient.Instance == null ||
-                    PlayerControl.LocalPlayer == null)
-                {
-                    return;
-                }
-
-                RegisterLocalAsModded();
+                if (PlayerControl.LocalPlayer != null)
+                    RegisterLocalAsModded();
                 BanModSyncApi.SendModdedHandshake();
             }
             catch

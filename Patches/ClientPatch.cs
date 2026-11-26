@@ -259,18 +259,6 @@ namespace BanMod
     }
 
     [HarmonyPatch(
-        typeof(AmongUsClient),
-        nameof(AmongUsClient.OnGameJoined)
-    )]
-    public static class VoteBanTrackerResetPatch
-    {
-        public static void Postfix()
-        {
-            VoteBanTracker.Reset();
-        }
-    }
-
-    [HarmonyPatch(
         typeof(BanMenu),
         nameof(BanMenu.SetVisible)
     )]

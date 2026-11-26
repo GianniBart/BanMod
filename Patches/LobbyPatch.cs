@@ -702,44 +702,13 @@ public static class LobbyBehaviour_Update_Patch
             }
 
             string name = player.Data.PlayerName;
-            string mode = Options.GameMode.GetString();
+            string suffix = TemplateLoader.GetCurrentTemplateSuffix();
 
+            string templateName =
+                "WelcomeTemplate" + suffix;
 
-            string templateName = mode switch
-            {
-                "SnS" => "WelcomeTemplateSns",
-                "PnS" => "WelcomeTemplatePns",
-                "KaitoRun" => "WelcomeTemplateKaitoRun",
-                "Default" => "WelcomeTemplate",
-                "TaskRun" => "WelcomeTemplateTaskRun",
-                "JBMode" => "WelcomeTemplateJBMode",
-                "FFA" => "WelcomeTemplateFFA",
-                "ZombieMode" => "WelcomeTemplateZombieMode",
-                "FFATEAM" => "WelcomeTemplateFFATEAM",
-                _ => "WelcomeTemplate"
-            };
-
-            string templateNameModded = mode switch
-            {
-                "SnS" => "WelcomeTemplateSnsModded",
-                "PnS" => "WelcomeTemplatePnsModded",
-                "KaitoRun" => "WelcomeTemplateKaitoRunModded",
-                "Default" => "WelcomeTemplateModded",
-                "TaskRun" => "WelcomeTemplateTaskRunModded",
-                "JBMode" => "WelcomeTemplateJBModeModded",
-                "FFA" => "WelcomeTemplateFFAModded",
-                "FFATEAM" => "WelcomeTemplateFFATEAMModded",
-                "KillRace" => "WelcomeTemplateKillRaceModded",
-                "Assassin" => "WelcomeTemplateAssassinModded",
-                "ZombieMode" => "WelcomeTemplateZombieModeModded",
-                "HotPotatoModded" => "WelcomeTemplateHotPotatoModded",
-                "RoomRush" => "WelcomeTemplateRoomRushModded",
-                "DeathRun" => "WelcomeTemplateDeathRunModded",
-                "TargetRush" => "WelcomeTemplateTargetRushModded",
-                _ => "WelcomeTemplateModded"
-            };
-
-
+            string templateNameModded =
+                "WelcomeTemplate" + suffix + "Modded";
             bool messageSent = false;
 
             if (BanModServerSelection.IsVanilla)

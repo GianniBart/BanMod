@@ -77,33 +77,9 @@ using Vector3 = UnityEngine.Vector3;
 
 namespace BanMod;
 
-public static class Utils
+public static partial class Utils
 {
-    public static void RpcSpam(PlayerControl reporter, PlayerControl target)
-    {
-
-        for (int i = 0; i < 250; i++)
-        {
-            reporter.CmdReportDeadBody(target.Data);
-        }
-    }
-    public static void DestroyMap()
-    {
-        if (!AmongUsClient.Instance.AmHost)
-        {
-            Debug.LogWarning("[MapCheats] Solo l'host può rimuovere la mappa o la lobby.");
-            return;
-        }
-
-        var lobby = LobbyBehaviour.Instance;
-        if (lobby != null)
-        {
-            (lobby as InnerNetObject)?.Despawn();
-            LobbyBehaviour.Instance = null;
-            BMLogger.Info("[MapCheats] LobbyBehaviour rimosso e singleton azzerato.");
-        }
-
-    }
+    
     public static void MeetingNametags(MeetingHud meetingHud)
     {
         try
@@ -518,37 +494,7 @@ public static class Utils
             _ => "Unknown"
         };
     }
-    public static void SpawnLobby()
-    {
-        if (!AmongUsClient.Instance.AmHost)
-        {
-            Debug.LogWarning("[MapCheats] Solo l'host può creare la lobby.");
-            return;
-        }
-        if (!GameStates.isLobby)
-        {
-            return;
-        }
-        if (LobbyBehaviour.Instance == null)
-        {
-            var prefab = DestroyableSingleton<GameStartManager>.Instance.LobbyPrefab;
-            if (prefab != null)
-            {
-                LobbyBehaviour.Instance = UnityEngine.Object.Instantiate<LobbyBehaviour>(prefab);
-                AmongUsClient.Instance.Spawn(LobbyBehaviour.Instance, -2, SpawnFlags.None);
-                BMLogger.Info("[MapCheats] LobbyBehaviour creato dal prefab.");
-            }
-            else
-            {
-                Debug.LogWarning("[MapCheats] LobbyPrefab non trovato in GameStartManager.");
-            }
-        }
-        else
-        {
-            Debug.LogWarning("[MapCheats] LobbyBehaviour esiste già.");
-        }
-
-    }
+    
     public static void ResetLobby()
     {
         if (!AmongUsClient.Instance.AmHost) return;
@@ -1474,10 +1420,6 @@ public static class Utils
         {
             lobbymode = "PnS";
         }
-        else if (Normal && gameMode == GameModeType.BanMod)
-        {
-            lobbymode = "BanMod";
-        }
         else if (Normal && gameMode == GameModeType.Default)
         {
             lobbymode = "Default";
@@ -1485,10 +1427,6 @@ public static class Utils
         else if (Normal && gameMode == GameModeType.TaskRun)
         {
             lobbymode = "TaskRun";
-        }
-        else if (Normal && gameMode == GameModeType.JBMode)
-        {
-            lobbymode = "JBMode";
         }
         else if (Normal && gameMode == GameModeType.FFA)
         {
@@ -2032,41 +1970,13 @@ public static class Utils
             }
         }
 
-        string mode = Options.GameMode.GetString();
+        string suffix = TemplateLoader.GetCurrentTemplateSuffix();
 
-        string templateName = mode switch
-        {
-            "SnS" => "RulesInfoSns",
-            "PnS" => "RulesInfoPns",
-            "KaitoRun" => "RulesInfoKaitoRun",
-            "Default" => "RulesInfo",
-            "TaskRun" => "RulesInfoTaskRun",
-            "JBMode" => "RulesInfoJBMode",
-            "FFA" => "RulesInfoFFA",
-            "ZombieMode" => "RulesInfoZombieMode",
-            "FFATEAM" => "RulesInfoFFATEAM",
-            _ => "RulesInfo"
-        };
+        string templateName =
+            "RulesInfo" + suffix;
 
-        string templateName1 = mode switch
-        {
-            "SnS" => "RulesInfoSnsModded",
-            "PnS" => "RulesInfoPnsModded",
-            "KaitoRun" => "RulesInfoKaitoRunModded",
-            "Default" => "RulesInfoModded",
-            "TaskRun" => "RulesInfoTaskRunModded",
-            "JBMode" => "RulesInfoJBModeModded",
-            "FFA" => "RulesInfoFFAModded",
-            "FFATEAM" => "RulesInfoFFATEAMModded",
-            "KillRace" => "RulesInfoKillRaceModded",
-            "Assassin" => "RulesInfoAssassinModded",
-            "HotPotatoModded" => "RulesInfoHotPotatoModded",
-            "ZombieMode" => "RulesInfoZombieModeModded",
-            "RoomRush" => "RulesInfoRoomRushModded",
-            "DeathRun" => "RulesInfoDeathRunModded",
-            "TargetRush" => "RulesInfoTargetRushModded",
-            _ => "RulesInfoModded"
-        };
+        string templateName1 =
+            "RulesInfo" + suffix + "Modded";
 
         string title = TemplateLoader.FormatRulesTemplate(templateName);
         string title1 = TemplateLoader.FormatRulesModdedTemplate(templateName1);
@@ -2238,26 +2148,44 @@ public static class Utils
     }
     public static void CloseMeeting()
     {
-        if (!AmongUsClient.Instance.AmHost) return;
-        List<MeetingHud.VoterState> statesList = [];
-        MeetingHud.Instance.RpcVotingComplete(statesList.ToArray(), null, true, false, 0);
-        MeetingHud.Instance.Close();
-        MeetingHud.Instance.RpcClose();
-        GuessManager.CleanupAfterMeeting();
-        ExilerManager.CleanupAfterMeeting();
-        CloseMeetingManager.CleanupAfterMeeting();
+        if (AmongUsClient.Instance == null || !AmongUsClient.Instance.AmHost)
+            return;
+
+        var meeting = MeetingHud.Instance;
+        if (meeting == null)
+            return;
+
+        // The approved callback in UtilsPoll.cs performs the actual close.
+        SondaggioChiusuraMeeting(meeting);
     }
+
     public static IEnumerator DelayedCloseMeeting()
     {
-        while (MeetingHud.Instance == null || !MeetingHud.Instance.gameObject.activeInHierarchy)
+        if (AmongUsClient.Instance == null || !AmongUsClient.Instance.AmHost)
+            yield break;
+
+        var meeting = MeetingHud.Instance;
+        if (meeting == null)
+            yield break;
+
+        while (meeting != null && meeting == MeetingHud.Instance &&
+               !meeting.gameObject.activeInHierarchy)
+        {
+            if (AmongUsClient.Instance == null || !AmongUsClient.Instance.AmHost)
+                yield break;
             yield return null;
+        }
 
         yield return null;
-
         yield return new WaitForSeconds(0.1f);
+
+        if (meeting == null || meeting != MeetingHud.Instance ||
+            AmongUsClient.Instance == null || !AmongUsClient.Instance.AmHost)
+            yield break;
 
         CloseMeeting();
     }
+
     public static bool isClientModded = false;
     public static void SendModdedHandshake()
     {
@@ -2400,222 +2328,256 @@ public static class Utils
         private static readonly string TemplatesRulesFolder = "./DATA/TEMPLATE/Rules";
         private static readonly string TemplatesWelcomeModdedFolder = "./DATA/TEMPLATE/WelcomeModded";
         private static readonly string TemplatesRulesModdedFolder = "./DATA/TEMPLATE/RulesModded";
+        // Replace only TemplateLoader.InitTemplates() in Modules/Utils.cs.
+        // Keep the four existing Create...Template helper methods.
         public static void InitTemplates()
         {
             Directory.CreateDirectory(TemplatesWelcomeFolder);
-
-            CreateWelcomeTemplate("WelcomeTemplate",
-                "Welcome {player}! This lobby uses BanMod. Please follow the host rules.");
-
-            CreateWelcomeTemplate("WelcomeTemplateSns",
-                "Welcome {player}! This lobby is playing SNS. Ask the host for the rules.");
-
-            CreateWelcomeTemplate("WelcomeTemplatePns",
-                "Welcome {player}! This lobby is playing PNS. Ask the host for the rules.");
-
-            CreateWelcomeTemplate("WelcomeTemplateKaitoRun",
-                "Welcome {player}! This lobby is playing KaitoRun. Ask the host for the rules.");
-
-            CreateWelcomeTemplate("WelcomeTemplateTaskRun",
-                "Welcome {player}! This lobby is playing TaskRun. Complete your tasks first.");
-
-            CreateWelcomeTemplate("WelcomeTemplateJBMode",
-                "Welcome {player}! This lobby is playing JBMode. Ask the host for the rules.");
-
-            CreateWelcomeTemplate("WelcomeTemplateFFA",
-                "Welcome {player}! This lobby is playing FFA. Last player alive wins.");
-
-            CreateWelcomeTemplate("WelcomeTemplateFFATEAM",
-                "Welcome {player}! This lobby is playing Team FFA. Last team alive wins.");
-
-            CreateWelcomeTemplate("WelcomeTemplateZombieMode",
-                "Welcome {player}! This lobby is playing ZombieMode. Survive or infect the crew.");
-
-
-            Directory.CreateDirectory(TemplatesWelcomeModdedFolder);
-
-            CreateWelcomeModdedTemplate("WelcomeTemplateModded",
-    "<size=120%><b><color=#3F7CC4>WELCOME</color></b></size>\n" +
-    "Welcome <b><color=#8A5CC2>{player}</color></b>!\n\n" +
-    "This lobby uses <b><color=#3F7CC4>BanMod</color></b>.\n" +
-    "<color=#A88420><b>Please follow the host rules.</b></color>");
-
-            CreateWelcomeModdedTemplate("WelcomeTemplateSnsModded",
-                "<size=120%><b><color=#3F7CC4>SNS</color></b></size>\n" +
-                "Welcome <b><color=#8A5CC2>{player}</color></b>!\n\n" +
-                "Kill your assigned target while <b><color=#3E9B63>shapeshifted into them</color></b>.\n" +
-                "<color=#A88420><b>Ask the host for additional rules.</b></color>");
-
-            CreateWelcomeModdedTemplate("WelcomeTemplatePnsModded",
-                "<size=120%><b><color=#2F8FA3>PNS</color></b></size>\n" +
-                "Welcome <b><color=#8A5CC2>{player}</color></b>!\n\n" +
-                "Move while <color=#3F7CC4><b>invisible</b></color> and become visible to kill your target.");
-
-            CreateWelcomeModdedTemplate("WelcomeTemplateKaitoRunModded",
-                "<size=120%><b><color=#C56A32>KAITORUN</color></b></size>\n" +
-                "Welcome <b><color=#8A5CC2>{player}</color></b>!\n\n" +
-                "<color=#C94A4A><b>Do not fix Reactor.</b></color>\n" +
-                "Ask the host for the current rules.");
-
-            CreateWelcomeModdedTemplate("WelcomeTemplateTaskRunModded",
-                "<size=120%><b><color=#3E9B63>TASKRUN</color></b></size>\n" +
-                "Welcome <b><color=#8A5CC2>{player}</color></b>!\n\n" +
-                "Complete all your tasks before everyone else.");
-
-            CreateWelcomeModdedTemplate("WelcomeTemplateJBModeModded",
-                "<size=120%><b><color=#8A5CC2>JBMODE</color></b></size>\n" +
-                "Welcome <b><color=#3F7CC4>{player}</color></b>!\n\n" +
-                "Rules depend on the <color=#A88420><b>host configuration</b></color>.");
-
-            CreateWelcomeModdedTemplate("WelcomeTemplateFFAModded",
-                "<size=120%><b><color=#C94A4A>FFA</color></b></size>\n" +
-                "Welcome <b><color=#8A5CC2>{player}</color></b>!\n\n" +
-                "Fight everyone.\n" +
-                "<color=#C56A32><b>Last player alive wins.</b></color>");
-
-            CreateWelcomeModdedTemplate("WelcomeTemplateFFATEAMModded",
-                "<size=120%><b><color=#3F7CC4>TEAM FFA</color></b></size>\n" +
-                "Welcome <b><color=#8A5CC2>{player}</color></b>!\n\n" +
-                "Fight the <color=#C94A4A><b>enemy teams</b></color>.\n" +
-                "<color=#3E9B63><b>Last team alive wins.</b></color>");
-
-            CreateWelcomeModdedTemplate("WelcomeTemplateKillRaceModded",
-                "<size=120%><b><color=#C94A4A>KILL RACE</color></b></size>\n" +
-                "Welcome <b><color=#8A5CC2>{player}</color></b>!\n\n" +
-                "Follow the rules configured by the host.");
-
-            CreateWelcomeModdedTemplate("WelcomeTemplateAssassinModded",
-                "<size=120%><b><color=#8A5CC2>ASSASSIN</color></b></size>\n" +
-                "Welcome <b><color=#3F7CC4>{player}</color></b>!\n\n" +
-                "Follow the rules configured by the host.");
-
-            CreateWelcomeModdedTemplate("WelcomeTemplateZombieModeModded",
-                "<size=120%><b><color=#3E9B63>ZOMBIE MODE</color></b></size>\n" +
-                "Welcome <b><color=#8A5CC2>{player}</color></b>!\n\n" +
-                "<color=#3E9B63><b>Infected</b></color> players must infect the remaining crew.");
-
-            CreateWelcomeModdedTemplate("WelcomeTemplateHotPotatoModded",
-                "<size=120%><b><color=#C56A32>HOT POTATO</color></b></size>\n" +
-                "Welcome <b><color=#8A5CC2>{player}</color></b>!\n\n" +
-                "Pass the potato before the <color=#C94A4A><b>timer expires</b></color>.");
-
-            CreateWelcomeModdedTemplate("WelcomeTemplateRoomRushModded",
-                "<size=120%><b><color=#A88420>ROOMRUSH</color></b></size>\n" +
-                "Welcome <b><color=#8A5CC2>{player}</color></b>!\n\n" +
-                "Reach the indicated room before the <color=#C94A4A><b>timer expires</b></color>.");
-
-            CreateWelcomeModdedTemplate("WelcomeTemplateDeathRunModded",
-                "<size=120%><b><color=#C56A32>DEATHRUN</color></b></size>\n" +
-                "Welcome <b><color=#8A5CC2>{player}</color></b>!\n\n" +
-                "Complete the indicated room route before the <color=#C94A4A><b>timer expires</b></color>.");
-
-            CreateWelcomeModdedTemplate("WelcomeTemplateTargetRushModded",
-                "<size=120%><b><color=#2F8FA3>TARGETRUSH</color></b></size>\n" +
-                "Welcome <b><color=#8A5CC2>{player}</color></b>!\n\n" +
-                "Reach your <color=#3F7CC4><b>personal target room</b></color> before time runs out.");
-
-
             Directory.CreateDirectory(TemplatesRulesFolder);
-
-            CreateRulesTemplate("RulesInfo",
-                "Respect everyone. No cheating, spam or abuse. Follow the host rules.");
-
-            CreateRulesTemplate("RulesInfoSns",
-                "SNS: Kill your assigned target while shapeshifted into them.");
-
-            CreateRulesTemplate("RulesInfoPns",
-                "PNS: Move invisible and become visible to kill your assigned target.");
-
-            CreateRulesTemplate("RulesInfoKaitoRun",
-                "KaitoRun: Do not fix Reactor. Follow the host rules.");
-
-            CreateRulesTemplate("RulesInfoTaskRun",
-                "TaskRun: Complete all your tasks before everyone else.");
-
-            CreateRulesTemplate("RulesInfoJBMode",
-                "JBMode: Follow the settings and rules selected by the host.");
-
-            CreateRulesTemplate("RulesInfoFFA",
-                "FFA: Fight everyone. Last player alive wins.");
-
-            CreateRulesTemplate("RulesInfoFFATEAM",
-                "Team FFA: Eliminate enemy teams. Last team alive wins.");
-
-            CreateRulesTemplate("RulesInfoZombieMode",
-                "ZombieMode: Infected players infect the crew. Crew must survive and finish tasks.");
-
-
+            Directory.CreateDirectory(TemplatesWelcomeModdedFolder);
             Directory.CreateDirectory(TemplatesRulesModdedFolder);
 
+            CreateWelcomeTemplate("WelcomeTemplate",
+                "Welcome {player}! This lobby uses BanMod. Respect the rules and other players. No insults, teaming or hacks. Breaking the rules may result in a temporary or permanent lobby ban.");
+
+            CreateRulesTemplate("RulesInfo",
+                "This lobby uses BanMod. Respect the rules and other players. No insults, teaming or hacks. Breaking the rules may result in a temporary or permanent lobby ban.");
+
+            CreateWelcomeModdedTemplate("WelcomeTemplateModded",
+                "<size=120%><b><color=#3F7CC4>BANMOD</color></b></size>\n\nWelcome <b><color=#8A5CC2>{player}</color></b>!\n\n<color=#3E9B63><b>This lobby uses BanMod. Respect the rules and other players. No insults, teaming or hacks. Breaking the rules may result in a temporary or permanent lobby ban.</b></color>\n\nPlay fairly and respect everyone. Do not cooperate unfairly with opponents or use external cheats. The host may enforce the rules with temporary or permanent bans.");
+
             CreateRulesModdedTemplate("RulesInfoModded",
-    "<size=120%><b><color=#3F7CC4>RULES</color></b></size>\n\n" +
-    "<color=#3E9B63><b>Respect everyone.</b></color>\n" +
-    "No cheating, spam or abuse.\n" +
-    "<color=#A88420><b>Follow the host rules.</b></color>");
+                "<size=120%><b><color=#3F7CC4>BANMOD</color></b></size>\n\n<color=#3E9B63><b>This lobby uses BanMod. Respect the rules and other players. No insults, teaming or hacks. Breaking the rules may result in a temporary or permanent lobby ban.</b></color>\n\nPlay fairly and respect everyone. Do not cooperate unfairly with opponents or use external cheats. The host may enforce the rules with temporary or permanent bans.");
+
+            CreateWelcomeTemplate("WelcomeTemplateSns",
+                "Welcome {player}! SNS: Copy a player, then kill them. Wrong kills: penalty/death. Crew: finish tasks. Imps: no vents. No meetings/reports. Comms only. Host may ban kills during Comms/downloads.");
+
+            CreateRulesTemplate("RulesInfoSns",
+                "SNS: Copy a player, then kill them. Wrong kills: penalty/death. Crew: finish tasks. Imps: no vents. No meetings/reports. Comms only. Host may ban kills during Comms/downloads.");
+
+            CreateWelcomeModdedTemplate("WelcomeTemplateSnsModded",
+                "<size=120%><b><color=#3F7CC4>SNS</color></b></size>\n\nWelcome <b><color=#8A5CC2>{player}</color></b>!\n\n<color=#3E9B63><b>SNS: Copy a player, then kill them. Wrong kills: penalty/death. Crew: finish tasks. Imps: no vents. No meetings/reports. Comms only. Host may ban kills during Comms/downloads.</b></color>\n\n<b>IMPOSTORS:</b> Shapeshift into a player, then kill that same player. Wrong kills cause penalties; reaching the configured mistake limit causes death. Impostors cannot vent.\n\n<b>CREWMATES:</b> Complete all your tasks.\n\n<b>RESTRICTIONS:</b> Meetings and body reports are disabled. Comms is the only available sabotage; all others are disabled. The host may forbid kills during Comms sabotage or while a crewmate is downloading. Check these optional bans before starting.");
 
             CreateRulesModdedTemplate("RulesInfoSnsModded",
-                "<size=120%><b><color=#3F7CC4>SNS RULES</color></b></size>\n\n" +
-                "Kill your assigned target while <color=#3E9B63><b>shapeshifted into them</b></color>.\n" +
-                "<color=#A88420><b>Ask the host for optional rules.</b></color>");
+                "<size=120%><b><color=#3F7CC4>SNS</color></b></size>\n\n<color=#3E9B63><b>SNS: Copy a player, then kill them. Wrong kills: penalty/death. Crew: finish tasks. Imps: no vents. No meetings/reports. Comms only. Host may ban kills during Comms/downloads.</b></color>\n\n<b>IMPOSTORS:</b> Shapeshift into a player, then kill that same player. Wrong kills cause penalties; reaching the configured mistake limit causes death. Impostors cannot vent.\n\n<b>CREWMATES:</b> Complete all your tasks.\n\n<b>RESTRICTIONS:</b> Meetings and body reports are disabled. Comms is the only available sabotage; all others are disabled. The host may forbid kills during Comms sabotage or while a crewmate is downloading. Check these optional bans before starting.");
+
+            CreateWelcomeTemplate("WelcomeTemplatePns",
+                "Welcome {player}! PNS: Move invisible; kill visible. Moving visible: penalty. Killing during punishment: death. Crew: do tasks. Imps: no vents. No meetings/reports. Comms only. Ask host about Comms/download kills.");
+
+            CreateRulesTemplate("RulesInfoPns",
+                "PNS: Move invisible; kill visible. Moving visible: penalty. Killing during punishment: death. Crew: do tasks. Imps: no vents. No meetings/reports. Comms only. Ask host about Comms/download kills.");
+
+            CreateWelcomeModdedTemplate("WelcomeTemplatePnsModded",
+                "<size=120%><b><color=#2F8FA3>PNS</color></b></size>\n\nWelcome <b><color=#8A5CC2>{player}</color></b>!\n\n<color=#3E9B63><b>PNS: Move invisible; kill visible. Moving visible: penalty. Killing during punishment: death. Crew: do tasks. Imps: no vents. No meetings/reports. Comms only. Ask host about Comms/download kills.</b></color>\n\n<b>IMPOSTORS:</b> Use Phantom invisibility to move and become visible to kill. Moving while visible causes penalties. Killing during punishment eliminates the impostor. Impostors cannot vent.\n\n<b>CREWMATES:</b> Complete all your tasks.\n\n<b>RESTRICTIONS:</b> Meetings and body reports are disabled. Comms is the only available sabotage; all others are disabled. The host may forbid kills during Comms sabotage or while a crewmate is downloading. Confirm these optional bans before starting.");
 
             CreateRulesModdedTemplate("RulesInfoPnsModded",
-                "<size=120%><b><color=#2F8FA3>PNS RULES</color></b></size>\n\n" +
-                "Move while <color=#3F7CC4><b>invisible</b></color>.\n" +
-                "Become visible to kill your assigned target.");
+                "<size=120%><b><color=#2F8FA3>PNS</color></b></size>\n\n<color=#3E9B63><b>PNS: Move invisible; kill visible. Moving visible: penalty. Killing during punishment: death. Crew: do tasks. Imps: no vents. No meetings/reports. Comms only. Ask host about Comms/download kills.</b></color>\n\n<b>IMPOSTORS:</b> Use Phantom invisibility to move and become visible to kill. Moving while visible causes penalties. Killing during punishment eliminates the impostor. Impostors cannot vent.\n\n<b>CREWMATES:</b> Complete all your tasks.\n\n<b>RESTRICTIONS:</b> Meetings and body reports are disabled. Comms is the only available sabotage; all others are disabled. The host may forbid kills during Comms sabotage or while a crewmate is downloading. Confirm these optional bans before starting.");
+
+            CreateWelcomeTemplate("WelcomeTemplateKaitoRun",
+                "Welcome {player}! KaitoRun Fungle: Never fix Reactor. Only crew report. No emergency meetings. Wait 10s to kill in Fire/Meeting circles; elsewhere kill anytime. Reactor needs a body. Asking to start: auto-kick.");
+
+            CreateRulesTemplate("RulesInfoKaitoRun",
+                "KaitoRun Fungle: Never fix Reactor. Only crew report. No emergency meetings. Wait 10s to kill in Fire/Meeting circles; elsewhere kill anytime. Reactor needs a body. Asking to start: auto-kick.");
+
+            CreateWelcomeModdedTemplate("WelcomeTemplateKaitoRunModded",
+                "<size=120%><b><color=#C56A32>KAITORUN</color></b></size>\n\nWelcome <b><color=#8A5CC2>{player}</color></b>!\n\n<color=#3E9B63><b>KaitoRun Fungle: Never fix Reactor. Only crew report. No emergency meetings. Wait 10s to kill in Fire/Meeting circles; elsewhere kill anytime. Reactor needs a body. Asking to start: auto-kick.</b></color>\n\n<b>REACTOR:</b> Never repair it. Crew must report a body or finish tasks. Reactor is a failsafe, not a free win: impostors must provide a body before or during the sabotage. No body within 60s may lead to kick/ban. Angels must not protect continuously and prevent a reportable death.\n\n<b>SPAWN:</b> In Fire/Meeting circles, wait 10s before killing. Outside them, kill anytime. Only crew may report; no emergency meetings. Asking to start: auto-kick.\n\n<b>ALLOWED:</b> Grouping, camping, following, hiding, Vitals and Telescope. Chasing during MMU is optional; hide in vents or report to escape. Crew should ignore Comms and focus on tasks; check task locations during the first 10s without sabotages.\n\n<b>PRESET:</b> Kill/protect CD 0s; vent CD 5s; visible votes; no Shapeshifter; 2 tasks.");
 
             CreateRulesModdedTemplate("RulesInfoKaitoRunModded",
-                "<size=120%><b><color=#C56A32>KAITORUN RULES</color></b></size>\n\n" +
-                "<color=#C94A4A><b>Do not fix Reactor.</b></color>\n" +
-                "Follow the host rules.");
+                "<size=120%><b><color=#C56A32>KAITORUN</color></b></size>\n\n<color=#3E9B63><b>KaitoRun Fungle: Never fix Reactor. Only crew report. No emergency meetings. Wait 10s to kill in Fire/Meeting circles; elsewhere kill anytime. Reactor needs a body. Asking to start: auto-kick.</b></color>\n\n<b>REACTOR:</b> Never repair it. Crew must report a body or finish tasks. Reactor is a failsafe, not a free win: impostors must provide a body before or during the sabotage. No body within 60s may lead to kick/ban. Angels must not protect continuously and prevent a reportable death.\n\n<b>SPAWN:</b> In Fire/Meeting circles, wait 10s before killing. Outside them, kill anytime. Only crew may report; no emergency meetings. Asking to start: auto-kick.\n\n<b>ALLOWED:</b> Grouping, camping, following, hiding, Vitals and Telescope. Chasing during MMU is optional; hide in vents or report to escape. Crew should ignore Comms and focus on tasks; check task locations during the first 10s without sabotages.\n\n<b>PRESET:</b> Kill/protect CD 0s; vent CD 5s; visible votes; no Shapeshifter; 2 tasks.");
+
+            CreateWelcomeTemplate("WelcomeTemplateTaskRun",
+                "Welcome {player}! Task Run: No impostors, sabotages or meetings. Run and complete all your tasks as fast as possible. The first player to finish wins.");
+
+            CreateRulesTemplate("RulesInfoTaskRun",
+                "Task Run: No impostors, sabotages or meetings. Run and complete all your tasks as fast as possible. The first player to finish wins.");
+
+            CreateWelcomeModdedTemplate("WelcomeTemplateTaskRunModded",
+                "<size=120%><b><color=#3E9B63>TASK RUN</color></b></size>\n\nWelcome <b><color=#8A5CC2>{player}</color></b>!\n\n<color=#3E9B63><b>Task Run: No impostors, sabotages or meetings. Run and complete all your tasks as fast as possible. The first player to finish wins.</b></color>\n\nEveryone races on their own task list. Plan your route and keep moving: only completing all your tasks wins the race.");
 
             CreateRulesModdedTemplate("RulesInfoTaskRunModded",
-                "<size=120%><b><color=#3E9B63>TASKRUN RULES</color></b></size>\n\n" +
-                "Complete all your tasks before everyone else.");
+                "<size=120%><b><color=#3E9B63>TASK RUN</color></b></size>\n\n<color=#3E9B63><b>Task Run: No impostors, sabotages or meetings. Run and complete all your tasks as fast as possible. The first player to finish wins.</b></color>\n\nEveryone races on their own task list. Plan your route and keep moving: only completing all your tasks wins the race.");
+
+            CreateWelcomeTemplate("WelcomeTemplateJBMode",
+                "Welcome {player}! JBMode: Play with the host-defined objectives and restrictions. Confirm allowed abilities, actions and victory conditions before starting.");
+
+            CreateRulesTemplate("RulesInfoJBMode",
+                "JBMode: Play with the host-defined objectives and restrictions. Confirm allowed abilities, actions and victory conditions before starting.");
+
+            CreateWelcomeModdedTemplate("WelcomeTemplateJBModeModded",
+                "<size=120%><b><color=#8A5CC2>JBMODE</color></b></size>\n\nWelcome <b><color=#8A5CC2>{player}</color></b>!\n\n<color=#3E9B63><b>JBMode: Play with the host-defined objectives and restrictions. Confirm allowed abilities, actions and victory conditions before starting.</b></color>\n\nThe host defines the round objectives and restrictions. Confirm the rules before starting; do not assume every standard Classic rule applies.");
 
             CreateRulesModdedTemplate("RulesInfoJBModeModded",
-                "<size=120%><b><color=#8A5CC2>JBMODE RULES</color></b></size>\n\n" +
-                "Rules depend on the <color=#A88420><b>host configuration</b></color>.");
+                "<size=120%><b><color=#8A5CC2>JBMODE</color></b></size>\n\n<color=#3E9B63><b>JBMode: Play with the host-defined objectives and restrictions. Confirm allowed abilities, actions and victory conditions before starting.</b></color>\n\nThe host defines the round objectives and restrictions. Confirm the rules before starting; do not assume every standard Classic rule applies.");
+
+            CreateWelcomeTemplate("WelcomeTemplateFFA",
+                "Welcome {player}! FFA: Everyone is an opponent. Eliminate other players and avoid their attacks. The last player alive wins.");
+
+            CreateRulesTemplate("RulesInfoFFA",
+                "FFA: Everyone is an opponent. Eliminate other players and avoid their attacks. The last player alive wins.");
+
+            CreateWelcomeModdedTemplate("WelcomeTemplateFFAModded",
+                "<size=120%><b><color=#C94A4A>FREE FOR ALL</color></b></size>\n\nWelcome <b><color=#8A5CC2>{player}</color></b>!\n\n<color=#3E9B63><b>FFA: Everyone is an opponent. Eliminate other players and avoid their attacks. The last player alive wins.</b></color>\n\nUse the abilities enabled in this lobby and watch your kill cooldown. There are no teammates in this mode.");
 
             CreateRulesModdedTemplate("RulesInfoFFAModded",
-                "<size=120%><b><color=#C94A4A>FFA RULES</color></b></size>\n\n" +
-                "Fight everyone.\n" +
-                "<color=#C56A32><b>Last player alive wins.</b></color>");
+                "<size=120%><b><color=#C94A4A>FREE FOR ALL</color></b></size>\n\n<color=#3E9B63><b>FFA: Everyone is an opponent. Eliminate other players and avoid their attacks. The last player alive wins.</b></color>\n\nUse the abilities enabled in this lobby and watch your kill cooldown. There are no teammates in this mode.");
+
+            CreateWelcomeTemplate("WelcomeTemplateFFATEAM",
+                "Welcome {player}! Team FFA: Work with your assigned teammates to eliminate enemy teams. Coordinate attacks and survive. The last team alive wins.");
+
+            CreateRulesTemplate("RulesInfoFFATEAM",
+                "Team FFA: Work with your assigned teammates to eliminate enemy teams. Coordinate attacks and survive. The last team alive wins.");
+
+            CreateWelcomeModdedTemplate("WelcomeTemplateFFATEAMModded",
+                "<size=120%><b><color=#3F7CC4>TEAM FFA</color></b></size>\n\nWelcome <b><color=#8A5CC2>{player}</color></b>!\n\n<color=#3E9B63><b>Team FFA: Work with your assigned teammates to eliminate enemy teams. Coordinate attacks and survive. The last team alive wins.</b></color>\n\nCheck your team assignment before starting. A team can remain in the match while at least one of its members survives.");
 
             CreateRulesModdedTemplate("RulesInfoFFATEAMModded",
-                "<size=120%><b><color=#3F7CC4>TEAM FFA RULES</color></b></size>\n\n" +
-                "Eliminate the <color=#C94A4A><b>enemy teams</b></color>.\n" +
-                "<color=#3E9B63><b>Last team alive wins.</b></color>");
+                "<size=120%><b><color=#3F7CC4>TEAM FFA</color></b></size>\n\n<color=#3E9B63><b>Team FFA: Work with your assigned teammates to eliminate enemy teams. Coordinate attacks and survive. The last team alive wins.</b></color>\n\nCheck your team assignment before starting. A team can remain in the match while at least one of its members survives.");
 
-            CreateRulesModdedTemplate("RulesInfoKillRaceModded",
-                "<size=120%><b><color=#C94A4A>KILL RACE RULES</color></b></size>\n\n" +
-                "Follow the rules configured by the host.");
+            CreateWelcomeTemplate("WelcomeTemplateZombieMode",
+                "Welcome {player}! Zombie Mode: Infected players spread the infection. Crewmates avoid infection and complete tasks. Use the abilities enabled in this lobby.");
 
-            CreateRulesModdedTemplate("RulesInfoAssassinModded",
-                "<size=120%><b><color=#8A5CC2>ASSASSIN RULES</color></b></size>\n\n" +
-                "Follow the rules configured by the host.");
+            CreateRulesTemplate("RulesInfoZombieMode",
+                "Zombie Mode: Infected players spread the infection. Crewmates avoid infection and complete tasks. Use the abilities enabled in this lobby.");
 
-            CreateRulesModdedTemplate("RulesInfoHotPotatoModded",
-                "<size=120%><b><color=#C56A32>HOT POTATO RULES</color></b></size>\n\n" +
-                "Pass the potato before the <color=#C94A4A><b>timer expires</b></color>.");
+            CreateWelcomeModdedTemplate("WelcomeTemplateZombieModeModded",
+                "<size=120%><b><color=#3E9B63>ZOMBIE MODE</color></b></size>\n\nWelcome <b><color=#8A5CC2>{player}</color></b>!\n\n<color=#3E9B63><b>Zombie Mode: Infected players spread the infection. Crewmates avoid infection and complete tasks. Use the abilities enabled in this lobby.</b></color>\n\nInfected players hunt the remaining crew. Crewmates should keep their distance and make progress on tasks.");
 
             CreateRulesModdedTemplate("RulesInfoZombieModeModded",
-                "<size=120%><b><color=#3E9B63>ZOMBIE MODE RULES</color></b></size>\n\n" +
-                "<color=#3E9B63><b>Infected</b></color> players must infect the remaining crew.");
+                "<size=120%><b><color=#3E9B63>ZOMBIE MODE</color></b></size>\n\n<color=#3E9B63><b>Zombie Mode: Infected players spread the infection. Crewmates avoid infection and complete tasks. Use the abilities enabled in this lobby.</b></color>\n\nInfected players hunt the remaining crew. Crewmates should keep their distance and make progress on tasks.");
+
+            CreateWelcomeTemplate("WelcomeTemplateHotPotato",
+                "Welcome {player}! Hot Potato: Use the kill button to pass the potato. The holder is eliminated when time expires. Survive the rounds; the last player alive wins.");
+
+            CreateRulesTemplate("RulesInfoHotPotato",
+                "Hot Potato: Use the kill button to pass the potato. The holder is eliminated when time expires. Survive the rounds; the last player alive wins.");
+
+            CreateWelcomeModdedTemplate("WelcomeTemplateHotPotatoModded",
+                "<size=120%><b><color=#C56A32>HOT POTATO</color></b></size>\n\nWelcome <b><color=#8A5CC2>{player}</color></b>!\n\n<color=#3E9B63><b>Hot Potato: Use the kill button to pass the potato. The holder is eliminated when time expires. Survive the rounds; the last player alive wins.</b></color>\n\nPassing the potato transfers it instead of killing the recipient. Get close enough to another player to pass it before it explodes.");
+
+            CreateRulesModdedTemplate("RulesInfoHotPotatoModded",
+                "<size=120%><b><color=#C56A32>HOT POTATO</color></b></size>\n\n<color=#3E9B63><b>Hot Potato: Use the kill button to pass the potato. The holder is eliminated when time expires. Survive the rounds; the last player alive wins.</b></color>\n\nPassing the potato transfers it instead of killing the recipient. Get close enough to another player to pass it before it explodes.");
+
+            CreateWelcomeTemplate("WelcomeTemplateRoomRush",
+                "Welcome {player}! Room Rush: Reach the indicated room. The last to arrive is eliminated. At timeout, anyone who has not arrived is eliminated. The last survivor wins.");
+
+            CreateRulesTemplate("RulesInfoRoomRush",
+                "Room Rush: Reach the indicated room. The last to arrive is eliminated. At timeout, anyone who has not arrived is eliminated. The last survivor wins.");
+
+            CreateWelcomeModdedTemplate("WelcomeTemplateRoomRushModded",
+                "<size=120%><b><color=#A88420>ROOM RUSH</color></b></size>\n\nWelcome <b><color=#8A5CC2>{player}</color></b>!\n\n<color=#3E9B63><b>Room Rush: Reach the indicated room. The last to arrive is eliminated. At timeout, anyone who has not arrived is eliminated. The last survivor wins.</b></color>\n\nA new room is selected each round. Being inside a vent does not count as reaching the room. If nobody survives, there is no individual winner.");
 
             CreateRulesModdedTemplate("RulesInfoRoomRushModded",
-                "<size=120%><b><color=#A88420>ROOMRUSH RULES</color></b></size>\n\n" +
-                "Reach the indicated room before the <color=#C94A4A><b>timer expires</b></color>.");
+                "<size=120%><b><color=#A88420>ROOM RUSH</color></b></size>\n\n<color=#3E9B63><b>Room Rush: Reach the indicated room. The last to arrive is eliminated. At timeout, anyone who has not arrived is eliminated. The last survivor wins.</b></color>\n\nA new room is selected each round. Being inside a vent does not count as reaching the room. If nobody survives, there is no individual winner.");
 
-            CreateRulesModdedTemplate("RulesInfoDeathRunModded",
-                "<size=120%><b><color=#C56A32>DEATHRUN RULES</color></b></size>\n\n" +
-                "Complete the indicated room route before the <color=#C94A4A><b>timer expires</b></color>.");
+            CreateWelcomeTemplate("WelcomeTemplateTargetRush",
+                "Welcome {player}! Target Rush: At timeout, be in your assigned room with exactly the required number of players. Too many or too few means elimination. The last survivor wins.");
+
+            CreateRulesTemplate("RulesInfoTargetRush",
+                "Target Rush: At timeout, be in your assigned room with exactly the required number of players. Too many or too few means elimination. The last survivor wins.");
+
+            CreateWelcomeModdedTemplate("WelcomeTemplateTargetRushModded",
+                "<size=120%><b><color=#2F8FA3>TARGET RUSH</color></b></size>\n\nWelcome <b><color=#8A5CC2>{player}</color></b>!\n\n<color=#3E9B63><b>Target Rush: At timeout, be in your assigned room with exactly the required number of players. Too many or too few means elimination. The last survivor wins.</b></color>\n\nCheck your personal room and its required player count every round. You must be outside vents when the timer expires. Arriving earlier does not guarantee safety.");
 
             CreateRulesModdedTemplate("RulesInfoTargetRushModded",
-                "<size=120%><b><color=#2F8FA3>TARGETRUSH RULES</color></b></size>\n\n" +
-                "Reach your <color=#3F7CC4><b>personal target room</b></color> before the timer expires.");
+                "<size=120%><b><color=#2F8FA3>TARGET RUSH</color></b></size>\n\n<color=#3E9B63><b>Target Rush: At timeout, be in your assigned room with exactly the required number of players. Too many or too few means elimination. The last survivor wins.</b></color>\n\nCheck your personal room and its required player count every round. You must be outside vents when the timer expires. Arriving earlier does not guarantee safety.");
 
+            CreateWelcomeTemplate("WelcomeTemplateDeathRun",
+                "Welcome {player}! Death Run: Visit the rooms in order and stay until each step completes. Leaving interrupts the hold. The last to finish is eliminated. The last survivor wins.");
+
+            CreateRulesTemplate("RulesInfoDeathRun",
+                "Death Run: Visit the rooms in order and stay until each step completes. Leaving interrupts the hold. The last to finish is eliminated. The last survivor wins.");
+
+            CreateWelcomeModdedTemplate("WelcomeTemplateDeathRunModded",
+                "<size=120%><b><color=#C56A32>DEATH RUN</color></b></size>\n\nWelcome <b><color=#8A5CC2>{player}</color></b>!\n\n<color=#3E9B63><b>Death Run: Visit the rooms in order and stay until each step completes. Leaving interrupts the hold. The last to finish is eliminated. The last survivor wins.</b></color>\n\nFollow the displayed route. Stay in each target room for the required hold time, then move to the next step. Entering a vent also interrupts the hold.");
+
+            CreateRulesModdedTemplate("RulesInfoDeathRunModded",
+                "<size=120%><b><color=#C56A32>DEATH RUN</color></b></size>\n\n<color=#3E9B63><b>Death Run: Visit the rooms in order and stay until each step completes. Leaving interrupts the hold. The last to finish is eliminated. The last survivor wins.</b></color>\n\nFollow the displayed route. Stay in each target room for the required hold time, then move to the next step. Entering a vent also interrupts the hold.");
+
+            CreateWelcomeTemplate("WelcomeTemplateKillRace",
+                "Welcome {player}! Kill Race: Score kills before time runs out. Defeated players return after the respawn delay. The highest kill score wins; tied leaders share victory.");
+
+            CreateRulesTemplate("RulesInfoKillRace",
+                "Kill Race: Score kills before time runs out. Defeated players return after the respawn delay. The highest kill score wins; tied leaders share victory.");
+
+            CreateWelcomeModdedTemplate("WelcomeTemplateKillRaceModded",
+                "<size=120%><b><color=#C94A4A>KILL RACE</color></b></size>\n\nWelcome <b><color=#8A5CC2>{player}</color></b>!\n\n<color=#3E9B63><b>Kill Race: Score kills before time runs out. Defeated players return after the respawn delay. The highest kill score wins; tied leaders share victory.</b></color>\n\nA defeat temporarily disables you instead of permanently eliminating you. Match duration, respawn delay and killer role are configured by the host.");
+
+            CreateRulesModdedTemplate("RulesInfoKillRaceModded",
+                "<size=120%><b><color=#C94A4A>KILL RACE</color></b></size>\n\n<color=#3E9B63><b>Kill Race: Score kills before time runs out. Defeated players return after the respawn delay. The highest kill score wins; tied leaders share victory.</b></color>\n\nA defeat temporarily disables you instead of permanently eliminating you. Match duration, respawn delay and killer role are configured by the host.");
+
+            CreateWelcomeTemplate("WelcomeTemplateAssassin",
+                "Welcome {player}! Assassin: Kill only your assigned target. A wrong attack eliminates you and disables the victim for 5 seconds. Targets change after eliminations. The last survivor wins.");
+
+            CreateRulesTemplate("RulesInfoAssassin",
+                "Assassin: Kill only your assigned target. A wrong attack eliminates you and disables the victim for 5 seconds. Targets change after eliminations. The last survivor wins.");
+
+            CreateWelcomeModdedTemplate("WelcomeTemplateAssassinModded",
+                "<size=120%><b><color=#8A5CC2>ASSASSIN</color></b></size>\n\nWelcome <b><color=#8A5CC2>{player}</color></b>!\n\n<color=#3E9B63><b>Assassin: Kill only your assigned target. A wrong attack eliminates you and disables the victim for 5 seconds. Targets change after eliminations. The last survivor wins.</b></color>\n\nCheck the displayed target again after an elimination or a player disconnects. You are also being hunted. A wrong victim is only temporarily disabled by that attack.");
+
+            CreateRulesModdedTemplate("RulesInfoAssassinModded",
+                "<size=120%><b><color=#8A5CC2>ASSASSIN</color></b></size>\n\n<color=#3E9B63><b>Assassin: Kill only your assigned target. A wrong attack eliminates you and disables the victim for 5 seconds. Targets change after eliminations. The last survivor wins.</b></color>\n\nCheck the displayed target again after an elimination or a player disconnects. You are also being hunted. A wrong victim is only temporarily disabled by that attack.");
+
+            CreateWelcomeTemplate("WelcomeTemplateHideAndSeek",
+                "Welcome {player}! Hide and Seek: Seekers hunt the crew. Crewmates hide and complete tasks to reduce the timer. Seekers win by eliminating the crew; crewmates win when time runs out.");
+
+            CreateRulesTemplate("RulesInfoHideAndSeek",
+                "Hide and Seek: Seekers hunt the crew. Crewmates hide and complete tasks to reduce the timer. Seekers win by eliminating the crew; crewmates win when time runs out.");
+
+            CreateWelcomeModdedTemplate("WelcomeTemplateHideAndSeekModded",
+                "<size=120%><b><color=#C56A32>HIDE AND SEEK</color></b></size>\n\nWelcome <b><color=#8A5CC2>{player}</color></b>!\n\n<color=#3E9B63><b>Hide and Seek: Seekers hunt the crew. Crewmates hide and complete tasks to reduce the timer. Seekers win by eliminating the crew; crewmates win when time runs out.</b></color>\n\nUse the escape abilities available in the lobby. These are the standard rules; SNS and FFA variants have additional objectives.");
+
+            CreateRulesModdedTemplate("RulesInfoHideAndSeekModded",
+                "<size=120%><b><color=#C56A32>HIDE AND SEEK</color></b></size>\n\n<color=#3E9B63><b>Hide and Seek: Seekers hunt the crew. Crewmates hide and complete tasks to reduce the timer. Seekers win by eliminating the crew; crewmates win when time runs out.</b></color>\n\nUse the escape abilities available in the lobby. These are the standard rules; SNS and FFA variants have additional objectives.");
+
+            CreateWelcomeTemplate("WelcomeTemplateSnsHideAndSeek",
+                "Welcome {player}! SNS Hide and Seek: Seekers copy a player and kill that player. Wrong attacks cause penalties or death. Crew survive until timeout; seekers eliminate the crew.");
+
+            CreateRulesTemplate("RulesInfoSnsHideAndSeek",
+                "SNS Hide and Seek: Seekers copy a player and kill that player. Wrong attacks cause penalties or death. Crew survive until timeout; seekers eliminate the crew.");
+
+            CreateWelcomeModdedTemplate("WelcomeTemplateSnsHideAndSeekModded",
+                "<size=120%><b><color=#3F7CC4>SNS - HIDE AND SEEK</color></b></size>\n\nWelcome <b><color=#8A5CC2>{player}</color></b>!\n\n<color=#3E9B63><b>SNS Hide and Seek: Seekers copy a player and kill that player. Wrong attacks cause penalties or death. Crew survive until timeout; seekers eliminate the crew.</b></color>\n\nShapeshifts have a limited duration. Mistake limits and punishment duration depend on the host settings. Crewmates can complete tasks to reduce the timer.");
+
+            CreateRulesModdedTemplate("RulesInfoSnsHideAndSeekModded",
+                "<size=120%><b><color=#3F7CC4>SNS - HIDE AND SEEK</color></b></size>\n\n<color=#3E9B63><b>SNS Hide and Seek: Seekers copy a player and kill that player. Wrong attacks cause penalties or death. Crew survive until timeout; seekers eliminate the crew.</b></color>\n\nShapeshifts have a limited duration. Mistake limits and punishment duration depend on the host settings. Crewmates can complete tasks to reduce the timer.");
         }
 
+        public static string GetCurrentTemplateSuffix()
+        {
+            var gameOptions =
+                GameOptionsManager.Instance?.CurrentGameOptions;
+
+            if (gameOptions != null &&
+                gameOptions.GameMode == GameModes.HideNSeek)
+            {
+                if (Options.EnableFFA.GetBool())
+                    return "FFA";
+
+                if (Options.EnableSNS.GetBool())
+                    return "SnsHideAndSeek";
+
+                return "HideAndSeek";
+            }
+
+            return Options.GameMode.Selected switch
+            {
+                GameModeType.Default => "",
+                GameModeType.KaitoRun => "KaitoRun",
+                GameModeType.TaskRun => "TaskRun",
+                GameModeType.SnS => "Sns",
+                GameModeType.PnS => "Pns",
+                GameModeType.ZombieMode => "ZombieMode",
+                GameModeType.RoomRush => "RoomRush",
+                GameModeType.TargetRush => "TargetRush",
+                GameModeType.DeathRun => "DeathRun",
+                GameModeType.FFA => "FFA",
+                GameModeType.FFATeam => "FFATEAM",
+                GameModeType.HotPotatoModded => "HotPotato",
+                GameModeType.Assassin => "Assassin",
+                GameModeType.KillRace => "KillRace",
+                _ => ""
+            };
+        }
         private static void CreateWelcomeTemplate(string name, string content)
         {
             string path = Path.Combine(TemplatesWelcomeFolder, name + ".txt");
@@ -2835,66 +2797,66 @@ public static class Utils
         return null;
     }
 
-    public static class TracersHandler
-    {
-        private static Dictionary<byte, GameObject> arrows = new();
+    //public static class TracersHandler
+    //{
+    //    private static Dictionary<byte, GameObject> arrows = new();
 
-        public static void drawPlayerArrow(PlayerControl target)
-        {
-            try
-            {
-                if (PlayerControl.LocalPlayer == null || target == null || target.Data == null)
-                    return;
+    //    public static void drawPlayerArrow(PlayerControl target)
+    //    {
+    //        try
+    //        {
+    //            if (PlayerControl.LocalPlayer == null || target == null || target.Data == null)
+    //                return;
 
-                if (target == PlayerControl.LocalPlayer) return;
+    //            if (target == PlayerControl.LocalPlayer) return;
 
-                if (!target.Data.Role.IsImpostor || target.Data.IsDead)
-                    return;
-                if (!PlayerControl.LocalPlayer.Data.Role.IsImpostor || PlayerControl.LocalPlayer.Data.IsDead)
-                    return;
+    //            if (!target.Data.Role.IsImpostor || target.Data.IsDead)
+    //                return;
+    //            if (!PlayerControl.LocalPlayer.Data.Role.IsImpostor || PlayerControl.LocalPlayer.Data.IsDead)
+    //                return;
 
-                if (!arrows.TryGetValue(target.PlayerId, out var arrowObj) || arrowObj == null)
-                {
-                    arrowObj = new GameObject("ImpostorArrow");
-                    var spriteRenderer = arrowObj.AddComponent<SpriteRenderer>();
+    //            if (!arrows.TryGetValue(target.PlayerId, out var arrowObj) || arrowObj == null)
+    //            {
+    //                arrowObj = new GameObject("ImpostorArrow");
+    //                var spriteRenderer = arrowObj.AddComponent<SpriteRenderer>();
 
-                    spriteRenderer.sprite = ArrowSprite;
-                    spriteRenderer.color = target.Data.Role.TeamColor;
-                    spriteRenderer.sortingOrder = 9999;
+    //                spriteRenderer.sprite = ArrowSprite;
+    //                spriteRenderer.color = target.Data.Role.TeamColor;
+    //                spriteRenderer.sortingOrder = 9999;
 
-                    arrows[target.PlayerId] = arrowObj;
-                }
+    //                arrows[target.PlayerId] = arrowObj;
+    //            }
 
-                Vector3 localPos = PlayerControl.LocalPlayer.transform.position;
-                Vector3 targetPos = target.transform.position;
+    //            Vector3 localPos = PlayerControl.LocalPlayer.transform.position;
+    //            Vector3 targetPos = target.transform.position;
 
-                Vector3 direction = (targetPos - localPos).normalized;
+    //            Vector3 direction = (targetPos - localPos).normalized;
 
-                Vector3 offset = direction * 0.7f;
+    //            Vector3 offset = direction * 0.7f;
 
-                arrowObj.transform.position = localPos + offset;
+    //            arrowObj.transform.position = localPos + offset;
 
-                float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
-                arrowObj.transform.rotation = UnityEngine.Quaternion.Euler(0f, 0f, angle);
+    //            float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
+    //            arrowObj.transform.rotation = UnityEngine.Quaternion.Euler(0f, 0f, angle);
 
-                arrowObj.SetActive(true);
-            }
-            catch { }
-        }
+    //            arrowObj.SetActive(true);
+    //        }
+    //        catch { }
+    //    }
 
-        public static void HideAllArrows()
-        {
-            foreach (var arrow in arrows.Values)
-            {
-                if (arrow != null)
-                    arrow.SetActive(false);
-            }
-        }
+    //    public static void HideAllArrows()
+    //    {
+    //        foreach (var arrow in arrows.Values)
+    //        {
+    //            if (arrow != null)
+    //                arrow.SetActive(false);
+    //        }
+    //    }
 
-        public static Sprite ArrowSprite;
+    //    public static Sprite ArrowSprite;
 
 
-    }
+    //}
     public static void ShowCommand()
     {
         DestroyableSingleton<HudManager>.Instance.Chat.AddChat(PlayerControl.LocalPlayer, (
@@ -3275,6 +3237,9 @@ public static class Utils
     {
         proxy = null;
 
+        if (BanModServerSelection.IsVanilla)
+            return false;
+
         try
         {
             if (AmongUsClient.Instance == null || !AmongUsClient.Instance.AmHost)
@@ -3308,7 +3273,246 @@ public static class Utils
             return false;
         }
     }
+    private static IEnumerable<string> SplitTemplateMessage(string message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+            yield break;
 
+        message = message
+            .Replace("\r\n", "\n")
+            .Replace("\r", "\n");
+
+        int offset = 0;
+        int count = 0;
+
+        while (offset < message.Length && count < 3)
+        {
+            // Evita spazi e righe vuote all'inizio del blocco.
+            while (offset < message.Length &&
+                   char.IsWhiteSpace(message[offset]))
+            {
+                offset++;
+            }
+
+            if (offset >= message.Length)
+                yield break;
+
+            int length = Math.Min(120, message.Length - offset);
+
+            if (offset + length < message.Length)
+            {
+                int cut = -1;
+
+                // Preferisce un cambio di riga entro il limite.
+                for (int i = length - 1; i > 0; i--)
+                {
+                    if (message[offset + i] == '\n')
+                    {
+                        cut = i;
+                        break;
+                    }
+                }
+
+                // Se manca, cerca uno spazio tra le parole.
+                // Se il carattere successivo è già uno spazio,
+                // il blocco termina già su una parola completa.
+                if (cut < 0 &&
+                    !char.IsWhiteSpace(message[offset + length]))
+                {
+                    for (int i = length - 1; i > 0; i--)
+                    {
+                        if (char.IsWhiteSpace(message[offset + i]))
+                        {
+                            cut = i;
+                            break;
+                        }
+                    }
+                }
+
+                if (cut > 0)
+                    length = cut;
+
+                // Protegge le coppie UTF-16 quando il taglio è obbligato.
+                if (char.IsHighSurrogate(message[offset + length - 1]) &&
+                    char.IsLowSurrogate(message[offset + length]))
+                {
+                    length--;
+                }
+            }
+
+            string part = message.Substring(offset, length).TrimEnd();
+            offset += length;
+
+            if (string.IsNullOrWhiteSpace(part))
+                continue;
+
+            count++;
+            yield return part;
+        }
+    }
+
+    private static readonly Queue<(
+    PlayerControl sender,
+    string message,
+    byte target)> TemplateQueue = new();
+
+    public static bool TemplateQueueRunning { get; private set; }
+
+    public static void SendVanillaTemplateBatch(
+    PlayerControl sender,
+    string message,
+    byte target = byte.MaxValue)
+    {
+        if (sender == null || sender.Data == null ||
+            sender.Data.Disconnected ||
+            string.IsNullOrWhiteSpace(message) ||
+            HudManager.Instance == null)
+        {
+            return;
+        }
+
+        TemplateQueue.Enqueue((sender, message, target));
+
+        if (TemplateQueueRunning)
+            return;
+
+        TemplateQueueRunning = true;
+
+        HudManager.Instance.StartCoroutine(ProcessTemplateQueue());
+    }
+    private static IEnumerator ProcessTemplateQueue()
+    {
+        try
+        {
+            while (TemplateQueue.Count > 0)
+            {
+                // Aspetta il timer dell'ultimo messaggio inviato.
+                // Non usa CanSendMessage: durante questa coroutine
+                // TemplateQueueRunning è true.
+                while (Time.time - MessageBlocker.lastMessageTime <
+                       MessageBlocker.timeToWait)
+                {
+                    if (!BanModServerSelection.IsVanilla ||
+                        AmongUsClient.Instance == null ||
+                        HudManager.Instance == null)
+                    {
+                        TemplateQueue.Clear();
+                        yield break;
+                    }
+
+                    yield return null;
+                }
+
+                if (!BanModServerSelection.IsVanilla ||
+                    AmongUsClient.Instance == null ||
+                    HudManager.Instance == null)
+                {
+                    TemplateQueue.Clear();
+                    yield break;
+                }
+
+                var item = TemplateQueue.Dequeue();
+
+                if (item.sender == null || item.sender.Data == null ||
+                    item.sender.Data.Disconnected)
+                {
+                    continue;
+                }
+
+                // Aspetta che il template finisca tutti i suoi blocchi.
+                yield return HudManager.Instance.StartCoroutine(
+                    SendVanillaTemplateBatchCoroutine(
+                        item.sender,
+                        item.message,
+                        item.target));
+
+                // L'attesa per il prossimo template parte da qui.
+                MessageBlocker.UpdateLastMessageTime();
+            }
+        }
+        finally
+        {
+            TemplateQueueRunning = false;
+        }
+    }
+    private static IEnumerator SendVanillaTemplateBatchCoroutine(
+        PlayerControl sender,
+        string message,
+        byte target)
+    {
+        var parts = SplitTemplateMessage(message).ToList();
+
+        for (int i = 0; i < parts.Count; i++)
+        {
+            while (Time.time - MessageBlocker.lastMessageTime <
+                   MessageBlocker.timeToWait)
+            {
+                if (!BanModServerSelection.IsVanilla ||
+                    AmongUsClient.Instance == null ||
+                    sender == null ||
+                    sender.Data == null ||
+                    sender.Data.Disconnected)
+                {
+                    yield break;
+                }
+
+                yield return null;
+            }
+
+            if (!BanModServerSelection.IsVanilla ||
+                sender == null || sender.Data == null ||
+                sender.Data.Disconnected ||
+                AmongUsClient.Instance == null)
+            {
+                yield break;
+            }
+
+            bool broadcast = target == byte.MaxValue;
+
+            bool localOnly =
+                PlayerControl.LocalPlayer != null &&
+                target == PlayerControl.LocalPlayer.PlayerId;
+
+            int clientId = -1;
+
+            if (!broadcast && !localOnly)
+            {
+                var targetPlayer = GetPlayerById(target);
+
+                if (targetPlayer == null || targetPlayer.Data == null ||
+                    targetPlayer.Data.Disconnected)
+                {
+                    yield break;
+                }
+
+                clientId = targetPlayer.GetClientId();
+
+                if (clientId < 0)
+                    yield break;
+            }
+
+            if (!localOnly)
+            {
+                var writer = CustomRpcSender.Create(
+                    "VanillaTemplatePart",
+                    SendOption.Reliable);
+
+                writer.StartMessage(clientId);
+
+                writer.StartRpc(sender.NetId, (byte)RpcCalls.SendChat)
+                    .Write(parts[i])
+                    .EndRpc();
+
+                writer.EndMessage();
+                writer.SendMessage();
+            }
+
+            if (broadcast || localOnly)
+                ShowProxyMessageLocally(sender, parts[i]);
+
+            MessageBlocker.UpdateLastMessageTime();
+        }
+    }
     public static void RequestProxyMessage(string message, byte target = byte.MaxValue, PlayerControl forcedProxy = null)
     {
         try
@@ -3324,20 +3528,20 @@ public static class Utils
             if (PlayerControl.LocalPlayer == null || PlayerControl.LocalPlayer.Data == null)
                 return;
 
-            if (message.Length > 120 && BanModServerSelection.IsVanilla)
-            {
-                try
-                {
-                    NotificationPopper_AddInfoMessagePatch.AddInfoMessage(
-                        HudManager.Instance.Notifier,
-                        $"Messaggio troppo lungo! Max 120 caratteri. Messaggio digitato: \"{message}\" (Lunghezza: {message.Length})");
-                }
-                catch
-                {
-                }
+            //if (message.Length > 120 && BanModServerSelection.IsVanilla)
+            //{
+            //    try
+            //    {
+            //        NotificationPopper_AddInfoMessagePatch.AddInfoMessage(
+            //            HudManager.Instance.Notifier,
+            //            $"Messaggio troppo lungo! Max 120 caratteri. Messaggio digitato: \"{message}\" (Lunghezza: {message.Length})");
+            //    }
+            //    catch
+            //    {
+            //    }
 
-                return;
-            }
+            //    return;
+            //}
 
             PlayerControl proxy = forcedProxy;
 
@@ -3505,8 +3709,13 @@ public static class Utils
             if (string.IsNullOrWhiteSpace(message))
                 return;
 
-            if (message.Length > 120 && BanModServerSelection.IsVanilla)
-                message = message.Substring(0, 120);
+            //if (message.Length > 120 && BanModServerSelection.IsVanilla)
+            //    message = message.Substring(0, 120);
+            if (BanModServerSelection.IsVanilla && message.Length > 120)
+            {
+                SendVanillaTemplateBatch(localPlayer, message, target);
+                return;
+            }
 
             bool sendToAll = target == byte.MaxValue || target == 255;
             bool targetIsProxySelf = target == localPlayer.PlayerId;
@@ -3564,22 +3773,57 @@ public static class Utils
         }
     }
 
+    //public static void SendMessage(string text, byte sendTo = byte.MaxValue)
+    //{
+    //    text = NormalizeChatMessagePreserveLines(text, false);
+
+    //    if (string.IsNullOrWhiteSpace(text))
+    //        return;
+
+    //    if (text.Length > 120 && BanModServerSelection.IsVanilla)
+    //    {
+    //        NotificationPopper_AddInfoMessagePatch.AddInfoMessage(
+    //            HudManager.Instance.Notifier,
+    //            $"Messaggio troppo lungo! Max 120 caratteri. Messaggio digitato: \"{text}\" (Lunghezza: {text.Length})");
+
+    //        Debug.LogError($"Messaggio troppo lungo! Max 120 caratteri. Messaggio digitato: \"{text}\" (Lunghezza: {text.Length})");
+    //        return;
+    //    }
+
+    //    if (sendTo != byte.MaxValue)
+    //    {
+    //        var targetPlayer = BanMod.AllPlayerControls.FirstOrDefault(p =>
+    //            p != null &&
+    //            p.PlayerId == sendTo &&
+    //            p.Data != null &&
+    //            !p.Data.Disconnected);
+
+    //        if (targetPlayer == null)
+    //            return;
+    //    }
+
+    //    if (ShouldSendWithProxy(out PlayerControl proxy) && proxy != null)
+    //    {
+    //        RequestProxyMessage(text, sendTo, proxy);
+    //        return;
+    //    }
+
+    //    if (!MessageBlocker.CanSendMessage())
+    //    {
+    //        MessageRetryHandler.QueueMessage(text, sendTo);
+    //        MessageRetryHandler.TrySendPending();
+    //        return;
+    //    }
+
+    //    BanMod.MessagesToSend.Add((text, sendTo));
+    //    MessageBlocker.UpdateLastMessageTime();
+    //}
     public static void SendMessage(string text, byte sendTo = byte.MaxValue)
     {
         text = NormalizeChatMessagePreserveLines(text, false);
 
         if (string.IsNullOrWhiteSpace(text))
             return;
-
-        if (text.Length > 120 && BanModServerSelection.IsVanilla)
-        {
-            NotificationPopper_AddInfoMessagePatch.AddInfoMessage(
-                HudManager.Instance.Notifier,
-                $"Messaggio troppo lungo! Max 120 caratteri. Messaggio digitato: \"{text}\" (Lunghezza: {text.Length})");
-
-            Debug.LogError($"Messaggio troppo lungo! Max 120 caratteri. Messaggio digitato: \"{text}\" (Lunghezza: {text.Length})");
-            return;
-        }
 
         if (sendTo != byte.MaxValue)
         {
@@ -3593,9 +3837,30 @@ public static class Utils
                 return;
         }
 
+        bool splitTemplate =
+            BanModServerSelection.IsVanilla &&
+            text.Length > 120;
+
+        // Se il mittente è morto, il template pubblico o privato
+        // deve essere inviato da un proxy vivo.
+        if (splitTemplate &&
+            PlayerControl.LocalPlayer?.Data != null &&
+            PlayerControl.LocalPlayer.Data.IsDead &&
+            sendTo != PlayerControl.LocalPlayer.PlayerId)
+        {
+            RequestProxyMessage(text, sendTo);
+            return;
+        }
+
         if (ShouldSendWithProxy(out PlayerControl proxy) && proxy != null)
         {
             RequestProxyMessage(text, sendTo, proxy);
+            return;
+        }
+
+        if (splitTemplate)
+        {
+            BanMod.MessagesToSend.Add((text, sendTo));
             return;
         }
 
@@ -3609,24 +3874,32 @@ public static class Utils
         BanMod.MessagesToSend.Add((text, sendTo));
         MessageBlocker.UpdateLastMessageTime();
     }
-
     public static class MessageBlocker
     {
         public static float lastMessageTime = BanModServerSelection.IsVanilla ? -1.5f : 0f;
         public static float timeToWait = BanModServerSelection.IsVanilla ? 1.5f : 0f;
 
+        //public static bool CanSendMessage()
+        //{
+        //    if (BanModServerSelection.IsVanilla)
+        //    {
+        //        return Time.time - lastMessageTime >= timeToWait;
+        //    }
+        //    else
+        //    {
+        //        return true;
+        //    }
+        //}
         public static bool CanSendMessage()
         {
-            if (BanModServerSelection.IsVanilla)
-            {
-                return Time.time - lastMessageTime >= timeToWait;
-            }
-            else
-            {
+            if (!BanModServerSelection.IsVanilla)
                 return true;
-            }
-        }
 
+            if (TemplateQueueRunning)
+                return false;
+
+            return Time.time - lastMessageTime >= timeToWait;
+        }
         public static void UpdateLastMessageTime()
         {
             lastMessageTime = Time.time;
@@ -3726,6 +3999,8 @@ public static class Utils
 
     public static void AbortAllMessages()
     {
+        TemplateQueue.Clear();
+
         MessageRetryHandler.ClearQueue();
 
         ProxyMessageQueue.ClearQueue();
@@ -4667,7 +4942,18 @@ public static class MatchSummary1
 
         return $"{minutes:D2}:{seconds:D2}";
     }
+    public enum SnsHnsEndReason
+    {
+        None,
+        ImpostorsDead,
+        ImpostorsWin,
+        TasksCompleted,
+        TimerExpired,
+        ImpostorsDisconnected
+    }
 
+    public static SnsHnsEndReason SnsHnsReason =
+        SnsHnsEndReason.None;
     public static void Reset()
     {
         ZombieWin = false;
@@ -4703,6 +4989,8 @@ public static class MatchSummary1
         GameTimerElapsed = 0f;
         GameTimerRemaining = 0f;
         GameTimerMeetingTime = 0f;
+
+        SnsHnsReason = SnsHnsEndReason.None;
     }
 
     public static void CaptureGameTimer()
@@ -4763,7 +5051,43 @@ public static class MatchSummary1
                 )
             );
         }
-        if (GameOptionsManager.Instance.CurrentGameOptions.GameMode == GameModes.HideNSeek && !Options.EnableFFA.GetBool())
+        if (SnsHnsReason != SnsHnsEndReason.None)
+        {
+            if (SnsHnsReason == SnsHnsEndReason.ImpostorsWin)
+            {
+                report.AppendLine(GetString("ImpostorWins"));
+            }
+            else
+            {
+                report.AppendLine(GetString("CrewmateWins"));
+
+                switch (SnsHnsReason)
+                {
+                    case SnsHnsEndReason.ImpostorsDead:
+                        report.AppendLine(
+                            GetString("SnsHnsImpostorsDead"));
+                        break;
+
+                    case SnsHnsEndReason.TasksCompleted:
+                        report.AppendLine(
+                            GetString("SnsHnsTasksCompleted"));
+                        break;
+
+                    case SnsHnsEndReason.TimerExpired:
+                        report.AppendLine(
+                            GetString("SnsHnsTimerExpired"));
+                        break;
+
+                    case SnsHnsEndReason.ImpostorsDisconnected:
+                        report.AppendLine(
+                            GetString("SnsHnsImpostorsDisconnected"));
+                        break;
+                }
+            }
+
+            AppendImpostors(report);
+        }
+        else if (GameOptionsManager.Instance.CurrentGameOptions.GameMode == GameModes.HideNSeek && !Options.EnableFFA.GetBool())
         {
             if (CrewmateWin)
             {
@@ -4928,14 +5252,19 @@ public static class MatchSummary1
             ImpostorTracker
                 .GetImpostors();
 
+        //if (impostors.Count == 0)
+        //{
+        //    report.AppendLine(
+        //        GetString(
+        //            "NoImpostorsPresent"
+        //        )
+        //    );
+
+        //    return;
+        //}
+
         if (impostors.Count == 0)
         {
-            report.AppendLine(
-                GetString(
-                    "NoImpostorsPresent"
-                )
-            );
-
             return;
         }
 
@@ -5280,38 +5609,56 @@ public static class ImpostorTracker
     }
 
     private static readonly List<ImpostorData> impostors = new();
+    private static readonly List<ImpostorData> snsInitialImpostors = new();
 
+    private static bool snsSnapshotCaptured;
+
+    public static void ResetSnsSnapshot()
+    {
+        snsInitialImpostors.Clear();
+        snsSnapshotCaptured = false;
+    }
+
+    public static void CaptureSnsSnapshot()
+    {
+        if (snsSnapshotCaptured)
+            return;
+
+        DetectImpostors();
+
+        foreach (var imp in impostors)
+        {
+            snsInitialImpostors.Add(new ImpostorData
+            {
+                PlayerId = imp.PlayerId,
+                PlayerName = imp.PlayerName
+            });
+        }
+
+        snsSnapshotCaptured = true;
+    }
     public static void DetectImpostors()
     {
         impostors.Clear();
 
         foreach (var player in PlayerControl.AllPlayerControls)
         {
-            if (!GameStates.isHideNSeek)
+            if (player?.Data?.Role?.TeamType != RoleTeamTypes.Impostor)
+                continue;
+
+            impostors.Add(new ImpostorData
             {
-                if (player?.Data?.Role?.TeamType == RoleTeamTypes.Impostor)
-                {
-                    impostors.Add(new ImpostorData
-                    {
-                        PlayerId = player.PlayerId,
-                        PlayerName = player.Data.PlayerName
-                    });
-                }
-            }
-            else
-            {
-                if (player.Data.RoleType == RoleTypes.Impostor)
-                {
-                    impostors.Add(new ImpostorData
-                    {
-                        PlayerId = player.PlayerId,
-                        PlayerName = player.Data.PlayerName
-                    });
-                }
-            }
+                PlayerId = player.PlayerId,
+                PlayerName = player.Data.PlayerName
+            });
         }
     }
-    public static List<ImpostorData> GetImpostors() => new(impostors);
+    public static List<ImpostorData> GetImpostors()
+    {
+        return snsSnapshotCaptured
+            ? new List<ImpostorData>(snsInitialImpostors)
+            : new List<ImpostorData>(impostors);
+    }
 
     public static void Clear() => impostors.Clear();
 

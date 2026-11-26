@@ -12,6 +12,8 @@ namespace BanMod;
 [HarmonyPatch(typeof(ChatBubble), nameof(ChatBubble.SetRight))]
 class ChatBubbleSetRightPatch
 {
+
+
     public static void Postfix(ChatBubble __instance)
     {
         if (Options.ChatLeft.GetBool()) __instance.SetLeft();
@@ -50,47 +52,6 @@ class ChatBubbleSetNamePatch
     }
 }
 
-[HarmonyPatch(typeof(TextBoxTMP), nameof(TextBoxTMP.SetText))]
-[HarmonyPatch(new[] { typeof(string), typeof(string) })]
-public static class TextBoxTMP_SetText_Patch
-{
-    public static void Postfix(TextBoxTMP __instance)
-    {
-        if (BanMod.IsBanModDisabled) return;
-        TextBoxTMP_ColorHelper.ApplyColor(__instance);
-    }
-}
-
-[HarmonyPatch(typeof(TextBoxTMP), nameof(TextBoxTMP.Update))]
-public static class TextBoxTMP_Update_Patch
-{
-    public static void Postfix(TextBoxTMP __instance)
-    {
-        if (BanMod.IsBanModDisabled) return;
-        TextBoxTMP_ColorHelper.ApplyColor(__instance);
-    }
-}
-
-public static class TextBoxTMP_ColorHelper
-{
-    public static void ApplyColor(TextBoxTMP instance)
-    {
-        if (instance == null || instance.outputText == null)
-            return;
-
-        if (ChatColorManager.currentChatColor.HasValue)
-        {
-            instance.outputText.color = ChatColorManager.currentChatColor.Value;
-        }
-        else
-        {
-            return;
-        }
-
-        if (instance.Pipe != null)
-            instance.Pipe.enabled = true;
-    }
-}
 [HarmonyPatch(typeof(ChatBubble), nameof(ChatBubble.SetName))]
 public static class ChatBubble_SetName
 {

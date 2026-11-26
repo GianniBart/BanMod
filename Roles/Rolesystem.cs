@@ -1933,8 +1933,7 @@ namespace BanMod
 
                 if (!zeroImpostorsMode && ForcedRoleHelpers.ShouldForceFourImpostors(allPlayersList.Count))
                 {
-                    adjustedNumImpostors = Math.Min(4, allPlayersList.Count);
-
+                    adjustedNumImpostors = Math.Min(Options.NumImpostor.GetInt(), allPlayersList.Count);
                 }
 
 

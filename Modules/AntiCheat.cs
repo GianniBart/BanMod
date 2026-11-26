@@ -2,7 +2,6 @@
 using AmongUs.GameOptions;
 using AmongUs.InnerNet.GameDataMessages;
 using BanMod;
-using BanMod.Modules.CustomHats;
 using BepInEx.Configuration;
 using BepInEx.Logging;
 using BepInEx.Unity.IL2CPP.Utils;
@@ -41,6 +40,36 @@ namespace BanMod
         private static void LogInfo(string text) => BMLogger.Info(text, LogTag);
         private static void LogWarn(string text) => BMLogger.Warn(text, LogTag);
         private static void LogError(string text) => BMLogger.Error(text, LogTag);
+
+        internal static bool IsHostReady()
+        {
+            try
+            {
+                AmongUsClient client = AmongUsClient.Instance;
+                return client != null && client.AmHost;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        internal static bool IsGameplayReadyForPlayerScan()
+        {
+            try
+            {
+                AmongUsClient client = AmongUsClient.Instance;
+                return client != null &&
+                       client.AmHost &&
+                       client.GameState == InnerNetClient.GameStates.Started &&
+                       ShipStatus.Instance != null &&
+                       PlayerControl.LocalPlayer != null;
+            }
+            catch
+            {
+                return false;
+            }
+        }
 
         public static void ShowHudNotification(string message)
         {
@@ -171,7 +200,7 @@ namespace BanMod
 
             public static void RegisterVentBoot(PlayerControl player)
             {
-                if (player == null || !AmongUsClient.Instance.AmHost) return;
+                if (player == null || !AntiCheat.IsHostReady()) return;
                 if (player == PlayerControl.LocalPlayer) return;
                 if (Time.time - lastCheckTime > Time.fixedDeltaTime)
                 {
@@ -191,7 +220,7 @@ namespace BanMod
                 {
                     if (!warnedPlayersVent.Contains(pid) && Options.KickVentCheat.GetBool() && Options.EnableAntiCheat.GetBool())
                     {
-                        if (!AmongUsClient.Instance.AmHost) return;
+                        if (!AntiCheat.IsHostReady()) return;
 
                         warnedPlayersVent.Add(pid);
                         string msg = $"{GetPlayerName(player)}{GetAuto("VentCheat")}";
@@ -346,115 +375,149 @@ namespace BanMod
 
             public static void Scan()
             {
-                if (AmongUsClient.Instance == null ||
-                    !AmongUsClient.Instance.AmHost ||
+                if (!AntiCheat.IsGameplayReadyForPlayerScan() ||
                     !Options.EnableAntiCheat.GetBool() ||
-                    !Options.KickVentCheat.GetBool() ||
-                    AmongUsClient.Instance.GameState != InnerNetClient.GameStates.Started ||
-                    ShipStatus.Instance == null)
+                    !Options.KickVentCheat.GetBool())
                 {
                     return;
                 }
 
-                float now = Time.realtimeSinceStartup;
-                bool meetingActive = MeetingHud.Instance != null;
-
-                if (meetingActive)
+                try
                 {
-                    if (!meetingWasActive)
+                    float now = Time.realtimeSinceStartup;
+                    bool meetingActive = MeetingHud.Instance != null;
+
+                    if (meetingActive)
+                    {
+                        if (!meetingWasActive)
+                        {
+                            ResetTransientVentState(now);
+                            meetingWasActive = true;
+                            LogDebug("Vent state cleared at meeting start.");
+                        }
+
+                        return;
+                    }
+
+                    if (meetingWasActive)
                     {
                         ResetTransientVentState(now);
-                        meetingWasActive = true;
-                        LogDebug("Vent state cleared at meeting start.");
+                        meetingWasActive = false;
+                        LogDebug("Vent state cleared at meeting end.");
                     }
 
-                    return;
+                    if (now < nextScanTime)
+                        return;
+
+                    nextScanTime = now + ScanInterval;
+
+                    var players = PlayerControl.AllPlayerControls;
+                    if (players == null)
+                        return;
+
+                    PlayerControl local = PlayerControl.LocalPlayer;
+
+                    foreach (PlayerControl player in players)
+                    {
+                        try
+                        {
+                            if (player == null ||
+                                local == null ||
+                                player == local ||
+                                player.Data == null ||
+                                player.Data.Disconnected ||
+                                player.Data.IsDead)
+                            {
+                                continue;
+                            }
+
+                            byte playerId = player.PlayerId;
+
+                            // transform can become invalid while Unity unloads a scene.
+                            if (player.transform == null)
+                                continue;
+
+                            Vector2 position = player.transform.position;
+                            bool inVent = player.inVent;
+
+                            if (!LastInVentState.TryGetValue(
+                                    playerId,
+                                    out bool previousInVent))
+                            {
+                                LastInVentState[playerId] = inVent;
+                                LastInVentStateChangedAt[playerId] = now;
+
+                                if (inVent)
+                                    VentAnchorPosition[playerId] = position;
+
+                                continue;
+                            }
+
+                            if (previousInVent != inVent)
+                            {
+                                LastInVentState[playerId] = inVent;
+                                LastInVentStateChangedAt[playerId] = now;
+
+                                if (inVent)
+                                    VentAnchorPosition[playerId] = position;
+                                else
+                                    VentAnchorPosition.Remove(playerId);
+                            }
+
+                            bool transitionGrace =
+                                LastInVentStateChangedAt.TryGetValue(
+                                    playerId,
+                                    out float changedAt) &&
+                                now - changedAt < PhysicalTransitionGraceSeconds;
+
+                            bool operationGrace =
+                                LastOperationTime.TryGetValue(
+                                    playerId,
+                                    out float operationAt) &&
+                                now - operationAt < StateGraceSeconds;
+
+                            bool suppressPhysicalChecks =
+                                transitionGrace ||
+                                operationGrace ||
+                                now < hostVentActionGraceUntil;
+
+                            bool expectedInside =
+                                ExpectedVentByPlayer.TryGetValue(
+                                    playerId,
+                                    out int expectedVentId);
+
+                            bool fakeInsideState =
+                                expectedInside && !inVent;
+
+                            bool fakeInsidePersisted = Persisted(
+                                $"tracked-not-actual:{playerId}",
+                                fakeInsideState,
+                                now
+                            );
+
+                            if (!suppressPhysicalChecks && fakeInsidePersisted)
+                            {
+                                Report(
+                                    player,
+                                    "Vent_State_Tracked_Not_Actual",
+                                    $"risulta nella vent {expectedVentId}, ma non è realmente entrato",
+                                    expectedVentId >= byte.MinValue &&
+                                    expectedVentId <= byte.MaxValue
+                                        ? (byte?)expectedVentId
+                                        : null
+                                );
+                            }
+                        }
+                        catch
+                        {
+                            // Destroyed IL2CPP PlayerControl during scene transition.
+                            // Skip only this player and continue scanning.
+                        }
+                    }
                 }
-
-                if (meetingWasActive)
+                catch
                 {
-                    ResetTransientVentState(now);
-                    meetingWasActive = false;
-                    LogDebug("Vent state cleared at meeting end.");
-                }
-
-                if (now < nextScanTime)
-                    return;
-
-                nextScanTime = now + ScanInterval;
-
-                foreach (PlayerControl player in PlayerControl.AllPlayerControls)
-                {
-                    if (player == null ||
-                        player == PlayerControl.LocalPlayer ||
-                        player.Data == null ||
-                        player.Data.Disconnected ||
-                        player.Data.IsDead)
-                    {
-                        continue;
-                    }
-
-                    byte playerId = player.PlayerId;
-                    Vector2 position = player.transform.position;
-
-                    if (!LastInVentState.TryGetValue(playerId, out bool previousInVent))
-                    {
-                        LastInVentState[playerId] = player.inVent;
-                        LastInVentStateChangedAt[playerId] = now;
-
-                        if (player.inVent)
-                            VentAnchorPosition[playerId] = position;
-
-                        continue;
-                    }
-
-                    if (previousInVent != player.inVent)
-                    {
-                        LastInVentState[playerId] = player.inVent;
-                        LastInVentStateChangedAt[playerId] = now;
-
-                        if (player.inVent)
-                            VentAnchorPosition[playerId] = position;
-                        else
-                            VentAnchorPosition.Remove(playerId);
-                    }
-
-                    bool transitionGrace =
-                        LastInVentStateChangedAt.TryGetValue(playerId, out float changedAt) &&
-                        now - changedAt < PhysicalTransitionGraceSeconds;
-
-                    bool operationGrace =
-                        LastOperationTime.TryGetValue(playerId, out float operationAt) &&
-                        now - operationAt < StateGraceSeconds;
-
-                    bool suppressPhysicalChecks =
-                        transitionGrace ||
-                        operationGrace ||
-                        now < hostVentActionGraceUntil;
-
-                    bool expectedInside =
-                        ExpectedVentByPlayer.TryGetValue(playerId, out int expectedVentId);
-
-                    bool fakeInsideState =
-                        expectedInside && !player.inVent;
-
-                    bool fakeInsidePersisted = Persisted(
-                        $"tracked-not-actual:{playerId}",
-                        fakeInsideState,
-                        now
-                    );
-
-                    if (!suppressPhysicalChecks && fakeInsidePersisted)
-                    {
-                        Report(
-                            player,
-                            "Vent_State_Tracked_Not_Actual",
-                            $"risulta nella vent {expectedVentId}, ma non è realmente entrato",
-                            expectedVentId >= byte.MinValue && expectedVentId <= byte.MaxValue
-                                ? (byte?)expectedVentId
-                                : null
-                        );
-                    }
+                    // Fail-open while scene singletons/lists are being rebuilt.
                 }
             }
 
@@ -516,7 +579,7 @@ namespace BanMod
 
         public static void SendGlobalHackWarning(ulong friendCode = 0)
         {
-            if (!AmongUsClient.Instance.AmHost)
+            if (!AntiCheat.IsHostReady())
             {
                 LogDebug("Global warning not sent: client is not host.");
                 return;
@@ -554,10 +617,8 @@ namespace BanMod
             if (Enum.IsDefined(typeof(CustomRPC), callId))
                 return;
 
-            if (callId == (byte)CustomHatSync.RpcId)
-                return;
 
-            if (!AmongUsClient.Instance.AmHost) return;
+            if (!AntiCheat.IsHostReady()) return;
             if (pc == null || reader == null) return;
             if (pc == PlayerControl.LocalPlayer) return;
 
@@ -628,8 +689,23 @@ public static class AntiCheatHudUpdatePatch
 {
     public static void Postfix()
     {
-        AntiCheat.FlushHudNotifications();
-        AntiCheat.VentStateMonitor.Scan();
+        try
+        {
+            AntiCheat.FlushHudNotifications();
+        }
+        catch
+        {
+            // HudManager/Notifier can disappear while changing scene.
+        }
+
+        try
+        {
+            AntiCheat.VentStateMonitor.Scan();
+        }
+        catch
+        {
+            // Never propagate anti-cheat exceptions through HudManager.Update.
+        }
     }
 }
 
@@ -708,7 +784,7 @@ public static class ShipStatus_UpdateSystem_Patch
         [HarmonyArgument(1)] PlayerControl player,
         [HarmonyArgument(2)] Hazel.MessageReader reader)
     {
-        if (!AmongUsClient.Instance.AmHost || player == null || reader == null) return;
+        if (!AntiCheat.IsHostReady() || player == null || reader == null) return;
 
         bool meetingActive = MeetingHud.Instance != null;
 
@@ -808,7 +884,7 @@ public static class ShipStatus_UpdateSystem_Patch
 
         if ((amount == 128) && !isAuthorized && Options.SabotageCheat2.GetBool() && Options.EnableAntiCheat.GetBool())
         {
-            if (!AmongUsClient.Instance.AmHost) return;
+            if (!AntiCheat.IsHostReady()) return;
             StartFixAfterDelay(playerName, player, systemType, amount, "Sabotage sent by unauthorized player");
         }
 
@@ -819,13 +895,13 @@ public static class ShipStatus_UpdateSystem_Patch
                 && Options.SabotageCheat2.GetBool()
                 && Options.EnableAntiCheat.GetBool())
             {
-                if (!AmongUsClient.Instance.AmHost) return;
+                if (!AntiCheat.IsHostReady()) return;
                 StartFixAfterDelay(playerName, player, systemType, amount, "Sabotage trigger sent by unauthorized player");
             }
         }
         else if ((amount == 69) && !isAuthorized && Options.SabotageCheat2.GetBool() && Options.EnableAntiCheat.GetBool())
         {
-            if (!AmongUsClient.Instance.AmHost) return;
+            if (!AntiCheat.IsHostReady()) return;
 
             string msg = $"{playerName}{GetAuto("SabotageCheat")} UnfixLight";
 
@@ -1132,7 +1208,7 @@ public static class GameEndPatchBM_AntiCheat
     private static void Postfix()
     {
         if (BanMod.BanMod.IsBanModDisabled) return;
-        if (!AmongUsClient.Instance.AmHost) return;
+        if (!AntiCheat.IsHostReady()) return;
         AntiCheat.ResetMatchState();
     }
 }
@@ -1149,7 +1225,7 @@ public static class CloseDoorsOfTypePatch
     public static void Prefix(ShipStatus __instance, SystemTypes room)
     {
         if (BanMod.BanMod.IsBanModDisabled) return;
-        if (!AmongUsClient.Instance.AmHost) return;
+        if (!AntiCheat.IsHostReady()) return;
 
         float now = Time.time;
 
@@ -1166,7 +1242,7 @@ public static class CloseDoorsOfTypePatch
 
         if (closeDoorsCount > 4 && !warningSent && (Options.ClooseDoorsCheat.GetBool() && Options.EnableAntiCheat.GetBool()))
         {
-            if (!AmongUsClient.Instance.AmHost) return;
+            if (!AntiCheat.IsHostReady()) return;
 
             string msg = GetAuto("AnonimousCheat");
             if (HudManager.Instance?.Notifier != null)
