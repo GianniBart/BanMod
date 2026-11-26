@@ -165,6 +165,7 @@ Principali progetti accreditati:
 - BetterAmongUs
 - GameLogger
 - componenti e contributori NLayer, con licenza MIT dove indicato
+- Spam bot database by AUGL (https://augl.net)
 
 I crediti non implicano affiliazione o approvazione.
 
