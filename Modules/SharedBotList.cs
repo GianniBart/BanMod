@@ -21,6 +21,9 @@ internal static class SharedBotList
         [JsonPropertyName("friendCode")]
         public string FriendCode { get; set; }
 
+        [JsonPropertyName("hashedPuid")]
+        public string HashedPuid { get; set; }
+
         [JsonPropertyName("playerName")]
         public string PlayerName { get; set; }
 
@@ -120,23 +123,35 @@ internal static class SharedBotList
                 return;
             }
 
-            var codes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var rows = new Dictionary<string, Entry>(StringComparer.OrdinalIgnoreCase);
             bool legacyFormat = false;
             foreach (string line in File.ReadLines(BotListPath))
             {
-                string code = line.Trim();
-                if (code.StartsWith("{", StringComparison.Ordinal))
+                string value = line.Trim();
+                Entry row;
+                if (value.StartsWith("{", StringComparison.Ordinal))
                 {
                     legacyFormat = true;
-                    code = ReadLegacyBotCode(code);
+                    row = ReadLegacyBot(value);
+                }
+                else
+                {
+                    string[] fields = value.Split(',', 3);
+                    legacyFormat |= fields.Length != 3;
+                    row = new Entry
+                    {
+                        FriendCode = fields[0],
+                        HashedPuid = fields.Length > 1 ? fields[1] : "",
+                        PlayerName = fields.Length > 2 ? fields[2] : ""
+                    };
                 }
 
-                if (IsBotCode(code))
-                    codes.Add(code);
+                if (row != null && IsBotCode(row.FriendCode))
+                    rows[row.FriendCode] = row;
             }
 
             if (legacyFormat)
-                WriteBotCodes(codes);
+                WriteBotRows(rows.Values);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -144,16 +159,15 @@ internal static class SharedBotList
         }
     }
 
-    private static string ReadLegacyBotCode(string line)
+    private static Entry ReadLegacyBot(string line)
     {
         try
         {
             using var json = JsonDocument.Parse(line);
-            if (json.RootElement.TryGetProperty("Bot", out var bot) &&
-                bot.ValueKind == JsonValueKind.Object &&
-                bot.TryGetProperty("friendCode", out var code) &&
-                code.ValueKind == JsonValueKind.String)
-                return code.GetString()?.Trim();
+            if (json.RootElement.ValueKind == JsonValueKind.Object &&
+                json.RootElement.TryGetProperty("Bot", out var bot) &&
+                bot.ValueKind == JsonValueKind.Object)
+                return JsonSerializer.Deserialize<Entry>(bot.GetRawText());
         }
         catch (JsonException) { }
 
@@ -178,13 +192,20 @@ internal static class SharedBotList
         return true;
     }
 
-    private static void WriteBotCodes(IEnumerable<string> codes)
+    private static void WriteBotRows(IEnumerable<Entry> rows)
     {
         var lines = new List<string>();
-        foreach (string code in codes)
+        foreach (Entry row in rows)
         {
-            if (IsBotCode(code))
-                lines.Add(code);
+            if (!IsBotCode(row.FriendCode))
+                continue;
+
+            string name = (row.PlayerName ?? "").Replace(',', ' ')
+                .Replace('\r', ' ').Replace('\n', ' ').Trim();
+            string puid = row.HashedPuid ?? "";
+            if (!System.Text.RegularExpressions.Regex.IsMatch(puid, @"\A[0-9a-fA-F]{9}\z"))
+                puid = "";
+            lines.Add($"{row.FriendCode},{puid},{name}");
         }
 
         lines.Sort(StringComparer.OrdinalIgnoreCase);
@@ -217,7 +238,7 @@ internal static class SharedBotList
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(BotListPath));
-            WriteBotCodes(Entries.Keys);
+            WriteBotRows(Entries.Values);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -358,7 +379,7 @@ internal static class SharedBotList
         try
         {
             client.StartCoroutine(SendReport(client.GameId, player.Id, owner, token,
-                friendCode, BanMod.GetRealPlayerName(player), reason, reportKey).WrapToIl2Cpp());
+                friendCode, player.GetHashedPuid(), BanMod.GetRealPlayerName(player), reason, reportKey).WrapToIl2Cpp());
         }
         catch (Exception)
         {
@@ -367,11 +388,11 @@ internal static class SharedBotList
     }
 
     private static IEnumerator SendReport(int gameId, int clientId, string requester,
-        string token, string friendCode, string playerName, string reason, string reportKey)
+        string token, string friendCode, string hashedPuid, string playerName, string reason, string reportKey)
     {
         try
         {
-            string json = JsonSerializer.Serialize(new { friendCode, playerName, reason });
+            string json = JsonSerializer.Serialize(new { friendCode, hashedPuid, playerName, reason });
             var task = SendAsync<ReportResponse>(
                 HttpMethod.Post, "/api/bots/add", requester, token, json);
             while (!task.IsCompleted)
