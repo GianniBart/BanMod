@@ -103,37 +103,103 @@ internal static class SharedBotList
 
     private const string BotListPath = "./DATA/DENIED/Bots.txt";
 
-    private sealed class CacheRow
-    {
-        public CacheRow() { }
+    private static bool textListInitialized;
 
-        public string Owner { get; set; }
-        public Entry Bot { get; set; }
+    private static void EnsureTextList()
+    {
+        if (textListInitialized)
+            return;
+
+        textListInitialized = true;
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(BotListPath));
+            if (!File.Exists(BotListPath))
+            {
+                File.WriteAllText(BotListPath, "");
+                return;
+            }
+
+            var codes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            bool legacyFormat = false;
+            foreach (string line in File.ReadLines(BotListPath))
+            {
+                string code = line.Trim();
+                if (code.StartsWith("{", StringComparison.Ordinal))
+                {
+                    legacyFormat = true;
+                    code = ReadLegacyBotCode(code);
+                }
+
+                if (IsBotCode(code))
+                    codes.Add(code);
+            }
+
+            if (legacyFormat)
+                WriteBotCodes(codes);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            WarnCacheWriteFailure();
+        }
     }
 
-    private static IEnumerable<CacheRow> ReadCacheRows()
+    private static string ReadLegacyBotCode(string line)
     {
-        if (!File.Exists(BotListPath))
-            yield break;
-
-        foreach (string line in File.ReadLines(BotListPath))
+        try
         {
-            if (string.IsNullOrWhiteSpace(line))
-                continue;
-
-            CacheRow row;
-            try
-            {
-                row = JsonSerializer.Deserialize<CacheRow>(line);
-            }
-            catch (JsonException)
-            {
-                continue;
-            }
-
-            if (row?.Bot != null && !string.IsNullOrWhiteSpace(row.Owner))
-                yield return row;
+            using var json = JsonDocument.Parse(line);
+            if (json.RootElement.TryGetProperty("Bot", out var bot) &&
+                bot.ValueKind == JsonValueKind.Object &&
+                bot.TryGetProperty("friendCode", out var code) &&
+                code.ValueKind == JsonValueKind.String)
+                return code.GetString()?.Trim();
         }
+        catch (JsonException) { }
+
+        return null;
+    }
+
+    private static bool IsBotCode(string code)
+    {
+        if (string.IsNullOrEmpty(code) || code.Length > 64)
+            return false;
+
+        int separator = code.IndexOf('#');
+        if (separator <= 0 || separator == code.Length - 1 || separator != code.LastIndexOf('#'))
+            return false;
+
+        for (int i = 0; i < code.Length; i++)
+        {
+            if (i != separator && !char.IsLetterOrDigit(code[i]))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static void WriteBotCodes(IEnumerable<string> codes)
+    {
+        var lines = new List<string>();
+        foreach (string code in codes)
+        {
+            if (IsBotCode(code))
+                lines.Add(code);
+        }
+
+        lines.Sort(StringComparer.OrdinalIgnoreCase);
+        string temporaryPath = BotListPath + ".tmp";
+        File.WriteAllLines(temporaryPath, lines);
+        File.Move(temporaryPath, BotListPath, overwrite: true);
+        cacheWriteWarning = false;
+    }
+
+    private static void WarnCacheWriteFailure()
+    {
+        if (!cacheWriteWarning)
+            BMLogger.LogWarning("[BanMod][Bots] Impossibile aggiornare Bots.txt.");
+
+        cacheWriteWarning = true;
     }
 
     private static void ReplaceEntries(IEnumerable<Entry> entries)
@@ -146,62 +212,16 @@ internal static class SharedBotList
         }
     }
 
-    private static void LoadCache()
-    {
-        if (owner.Length == 0)
-            return;
-
-        try
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(BotListPath));
-            if (!File.Exists(BotListPath))
-                File.WriteAllText(BotListPath, "");
-
-            var entries = new List<Entry>();
-            foreach (CacheRow row in ReadCacheRows())
-            {
-                if (SameFriendCode(row.Owner, owner))
-                    entries.Add(row.Bot);
-            }
-
-            ReplaceEntries(entries);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
-        {
-            BMLogger.LogWarning("[BanMod][Bots] Cache locale non leggibile.");
-        }
-    }
-
     private static void SaveCache()
     {
-        if (owner.Length == 0)
-            return;
-
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(BotListPath));
-            var lines = new List<string>();
-
-            foreach (CacheRow row in ReadCacheRows())
-            {
-                if (!SameFriendCode(row.Owner, owner))
-                    lines.Add(JsonSerializer.Serialize(row));
-            }
-
-            foreach (Entry entry in Entries.Values)
-                lines.Add(JsonSerializer.Serialize(new CacheRow { Owner = owner, Bot = entry }));
-
-            string temporaryPath = BotListPath + ".tmp";
-            File.WriteAllLines(temporaryPath, lines);
-            File.Move(temporaryPath, BotListPath, overwrite: true);
-            cacheWriteWarning = false;
+            WriteBotCodes(Entries.Keys);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            if (!cacheWriteWarning)
-                BMLogger.LogWarning("[BanMod][Bots] Impossibile salvare la cache locale.");
-
-            cacheWriteWarning = true;
+            WarnCacheWriteFailure();
         }
     }
 
@@ -215,7 +235,6 @@ internal static class SharedBotList
         Entries.Clear();
         nextRefresh = 0f;
         cacheWriteWarning = false;
-        LoadCache();
     }
 
     private static bool IsCurrentOwner(string requestedOwner) =>
@@ -249,6 +268,7 @@ internal static class SharedBotList
 
     internal static void Tick()
     {
+        EnsureTextList();
         SyncOwner();
         bool isHost = CanManage();
 
@@ -453,7 +473,6 @@ internal static class SharedBotList
             if (Entries.TryGetValue(friendCode, out var entry))
                 entry.UnlockedByMe = response.UnlockedByMe;
 
-            SaveCache();
             nextRefresh = 0f;
             success = true;
         }

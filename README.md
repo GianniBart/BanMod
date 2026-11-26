@@ -165,8 +165,7 @@ Main credited projects include:
 - BetterAmongUs
 - GameLogger
 - NLayer components and contributors, under the MIT License where indicated
-
-Credits do not imply affiliation or endorsement.
+- Spam bot database by AUGL (https://augl.net)
 
 ## Licenses
 
